@@ -101,7 +101,7 @@ public class WebhookChannel implements NotifyChannel {
             return SendResult.success(String.valueOf(status), truncate(response.body()), cost);
         }
         if (status == 429) {
-            throw new ChannelRateLimitException(NAME, "webhook rate limited: " + response.body());
+            throw new ChannelRateLimitException(NAME, "webhook rate limited (429): " + response.body());
         }
         if (status >= 500) {
             throw new ChannelException(NAME, "webhook server error " + status + ": " + truncate(response.body()));

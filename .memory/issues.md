@@ -111,10 +111,13 @@
 - **关闭方式**：url / scm / developer.url / issueManagement 统一改为 Gitee 实际地址。
 
 ## ISSUE-010 渠道契约测试缺失（§18.3）
-- **状态**：OPEN（P0 后续）
-- **现象**：email / webhook 没有任何 WireMock 契约测试；webhook 的 HMAC 签名只有实现没有断言。
+- **状态**：OPEN（webhook 已完成，email 待补）
+- **现象**：email / webhook 没有任何契约测试；webhook 的 HMAC 签名只有实现没有断言。
 - **影响**：§21.2 第 8 步验收「WireMock 契约测试」未达成，IM 平台改版风险（R7）无护栏。
-- **计划**：随 iter-02/03 之后补 `notifyx-channel-webhook` 契约测试（JDK HttpServer 或 WireMock，避免新增重依赖）。
+- **iter-06 进展**：`WebhookChannelTest` 12 个用例覆盖签名、报文、429/5xx/4xx 分类、
+  expect-status、白名单、空 URL、读超时、响应截断（JDK HttpServer，零新增依赖）；
+  顺带修掉 429 异常 message 不含状态码的问题。webhook 覆盖率 84.7%（门禁 80%）。
+- **仍缺**：email 渠道契约测试（需要伪 SMTP 或拆出报文组装单测）。
 
 ## ISSUE-011 中文日志/注释在 Windows GBK 控制台下显示乱码（非代码缺陷）
 - **状态**：CLOSED（记录性）
