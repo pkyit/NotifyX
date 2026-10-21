@@ -82,6 +82,26 @@ public final class InMemoryFailureStore implements FailureStore {
     }
 
     @Override
+    public synchronized boolean requeue(String recordId, int expectedVersion, int attempts, long nextRetryAt) {
+        Optional<FailedRecord> found = records.stream()
+                .filter(record -> record.recordId().equals(recordId))
+                .findFirst();
+        if (found.isEmpty() || found.get().version() != expectedVersion) {
+            return false;
+        }
+        FailedRecord current = found.get();
+        List<FailedRecord> snapshot = new ArrayList<>(records);
+        snapshot.replaceAll(record -> record.recordId().equals(recordId)
+                ? new FailedRecord(current.recordId(), RecordStatus.PENDING, current.version() + 1,
+                        current.envelopeJson(), current.channel(), current.failureReason(), attempts,
+                        current.createdAt(), nextRetryAt)
+                : record);
+        records.clear();
+        records.addAll(snapshot);
+        return true;
+    }
+
+    @Override
     public synchronized long pendingCount() {
         return records.stream().filter(record -> record.status() == RecordStatus.PENDING).count();
     }

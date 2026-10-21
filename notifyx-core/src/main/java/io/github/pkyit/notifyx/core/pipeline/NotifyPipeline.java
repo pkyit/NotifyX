@@ -116,9 +116,13 @@ public final class NotifyPipeline {
     /**
      * 处理一个事件（同步执行，通常运行在通知线程池中）。
      *
+     * <p>返回值用于失败补偿判断：REJECT/异常返回 false，DEFER 返回 true（已受理），
+     * 投递完成且没有任何渠道失败也返回 true。</p>
+     *
      * @param event 事件
+     * @return 是否被成功受理/投递
      */
-    public void handle(NotifyEvent event) {
+    public boolean handle(NotifyEvent event) {
         Objects.requireNonNull(event, "event");
         try {
             metrics.eventReceived(event, "L4");
@@ -137,18 +141,20 @@ public final class NotifyPipeline {
                     aggregator.record(event, level, dedupeKey, instanceId);
                 }
                 reject(event, verdict.reason());
-                return;
+                return false;
             }
             if (verdict.decision() == FilterVerdict.Decision.DEFER) {
                 defer(event, verdict);
-                return;
+                return true;
             }
             boolean failed = dispatch(event, scene, level, renderParams, dedupeKey);
             if (!failed && escalation != null) {
                 escalation.recordSuccess(event.scene());
             }
+            return !failed;
         } catch (RuntimeException ex) {
             log.warn("notifyx pipeline failed for scene={} eventId={}: {}", event.scene(), event.eventId(), ex.toString());
+            return false;
         }
     }
 

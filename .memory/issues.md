@@ -148,14 +148,14 @@
 - **计划**：P1 增加 `notifyx.logback.exclude-logger-prefixes`（或 Appender 属性），并校验不能移除默认前缀。
 
 ## ISSUE-015 失败记录自动补偿未实现（runner 待做）
-- **状态**：OPEN（iter-15 已备好报文契约）
+- **状态**：CLOSED（iter-16）
 - **现象**：失败记录可落盘/读回/改状态，但「自动补偿任务」尚不可用。
-- **iter-15 进展**：`NotifyEnvelope`（§6.5）+ `NotifyEnvelopeCodec` + 零依赖 `JsonCodec` 已完成；
-  `persistFailure` 现在写入可还原的完整报文（序列化失败才退化为 eventId），并有落盘解码测试。
-- **仍缺**：`FailureCompensationRunner`：定时扫描 `loadPending` → CAS `SENDING` → 重建事件重投 →
-  `SENT`/`DEAD` + 退避；需要管线提供「同步投递结果」或采用最佳努力语义。
-- **影响**：失败落盘目前是「留痕 + 人工可查」，不是「自动恢复」；关闭时未排空事件仍只 warn。
-- **计划**：先定义 `NotifyEnvelope`（§6.5）及其序列化/反序列化（core 零依赖或 optional JSON），
-  再实现 `FailureCompensationRunner`：CAS 抢占 → 重投 → SENT/DEAD + 退避。
-  与 MQ consumer、JDBC store 一起设计，避免两套报文契约。
-- **关联**：D-003（部分落地）、D-017。
+- **iter-15**：`NotifyEnvelope`（§6.5）+ `NotifyEnvelopeCodec` + 零依赖 `JsonCodec` 已完成；
+  `persistFailure` 写入可还原的完整报文，并有落盘解码测试。
+- **iter-16 关闭方式**：`FailureCompensationRunner` 实现 §9.9 状态机：
+  定时 `loadPending` → CAS `SENDING` → `deliverSync` → `SENT`；
+  失败按 `retry-backoff` 重排、达到 `max-attempts` 转 `DEAD`；解码失败直接 `DEAD`。
+  默认关闭（`notifyx.fallback.compensation.enabled=false`），开启后每实例扫描 + 乐观锁抢占。
+- **已知限制**：自定义 `NotifyKit`（非 `DefaultNotifyKit`）没有同步结果，按「提交成功」处理（D-018）；
+  单实例扫描的 IO 放大在多实例下存在，ShedLock/MQ 单消费者属 P2/P3。
+- **关联**：D-003（部分落地）、D-017、D-018。

@@ -152,6 +152,29 @@ public final class LocalFileFailureStore implements FailureStore {
     }
 
     @Override
+    public synchronized boolean requeue(String recordId, int expectedVersion, int attempts, long nextRetryAt) {
+        Path path = pathFor(recordId);
+        if (path == null) {
+            return false;
+        }
+        Optional<FailedRecord> loaded = read(path);
+        if (loaded.isEmpty() || loaded.get().version() != expectedVersion) {
+            return false;
+        }
+        FailedRecord current = loaded.get();
+        FailedRecord updated = new FailedRecord(current.recordId(), RecordStatus.PENDING, current.version() + 1,
+                current.envelopeJson(), current.channel(), current.failureReason(), attempts,
+                current.createdAt(), nextRetryAt);
+        try {
+            writeAtomically(path, toJson(updated));
+            return true;
+        } catch (IOException ex) {
+            log.warn("notifyx failed to requeue failure record {}: {}", recordId, ex.toString());
+            return false;
+        }
+    }
+
+    @Override
     public synchronized long pendingCount() {
         long count = 0;
         for (FailedRecord record : loadAll()) {

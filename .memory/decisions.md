@@ -256,3 +256,21 @@
 - **理由**：先把「重启不丢 + 可查 + 可标记」做扎实；自动补偿涉及报文契约，仓促实现会返工。
 - **影响**：默认仍是内存实现，`notifyx.fallback.store=file` 才启用；磁盘上限保护避免写满磁盘。
 - **复审条件**：`NotifyEnvelope` 落地后实现补偿任务，并把本节第 4 条替换为完整状态机。
+
+## D-018 补偿执行语义：优先真实结果，自定义门面按提交成功
+
+- **日期**：2026-10-22（iter-16）
+- **状态**：生效
+- **背景**：`NotifyKit` 的 6 个方法全是 void（§6.7 刻意克制），补偿无法知道「重投到底成没成」。
+  另外多实例可能同时扫同一存储，必须用乐观锁避免重复补偿。
+- **决策**：
+  1. `NotifyPipeline.handle` 改为返回 boolean（REJECT/异常 false、DEFER true、dispatch 无失败 true），
+     `DefaultNotifyKit` 暴露 `deliverSync(event)` 供补偿器使用；
+  2. 补偿器优先走 `deliverSync`；若用户自定义了 `NotifyKit`（非 `DefaultNotifyKit`），
+     退化为 `send` 并**按提交成功处理**，在 README/本节声明这一限制；
+  3. 定时调度默认关闭（`fallback.compensation.enabled=false`），开启后**每个实例都扫**，
+     靠 `updateStatus(SENDING)` 的版本 CAS 抢占；ShedLock/MQ 单消费者属于 P2/P3；
+  4. 解码失败直接 `DEAD`，不消耗重试次数；失败按 `retry-backoff` 重排，达到 `max-attempts` 转 `DEAD`。
+- **理由**：不为了补偿而破坏 `NotifyKit` 的 6 方法契约；真实结果只在默认实现上可得，诚实标注退化路径。
+- **影响**：`handle` 返回值是源码兼容、二进制不兼容的改动（1.0.0-SNAPSHOT 阶段可接受）。
+- **复审条件**：MQ 单消费者模式落地后，补偿改由 consumer 负责，本执行器降级为本地兜底。

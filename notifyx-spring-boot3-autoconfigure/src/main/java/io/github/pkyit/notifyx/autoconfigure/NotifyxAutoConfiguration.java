@@ -158,6 +158,26 @@ public class NotifyxAutoConfiguration {
     }
 
     /**
+     * 失败自动补偿（设计书 9.9）：默认关闭，开启后定时扫描并重投。
+     *
+     * @param notifyKit 门面
+     * @param failureStore 失败存储
+     * @param properties 配置
+     * @return 补偿器
+     */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "notifyx.fallback.compensation", name = "enabled", havingValue = "true")
+    public FailureCompensationRunner notifyxCompensationRunner(NotifyKit notifyKit, FailureStore failureStore,
+                                                               NotifyxProperties properties) {
+        NotifyxProperties.Compensation compensation = properties.getFallback().getCompensation();
+        return new FailureCompensationRunner(notifyKit, failureStore,
+                new FailureCompensationRunner.Config(compensation.isEnabled(), compensation.getInterval(),
+                        compensation.getBatchSize(), compensation.getMaxAttempts(),
+                        compensation.getRetryBackoff()));
+    }
+
+    /**
      * SpEL 求值器。
      *
      * @param properties 配置
