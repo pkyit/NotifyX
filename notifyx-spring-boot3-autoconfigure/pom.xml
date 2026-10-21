@@ -11,6 +11,12 @@
     <artifactId>notifyx-spring-boot3-autoconfigure</artifactId>
     <name>NotifyX Autoconfigure</name>
     <description>自动装配、配置属性、启动诊断</description>
+
+    <properties>
+        <!-- 装配/健康/诊断/指标/生命周期均有测试；配置 POJO 的 getter/setter 拉低分母 -->
+        <jacoco.minimum>0.60</jacoco.minimum>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.github.pkyit</groupId>

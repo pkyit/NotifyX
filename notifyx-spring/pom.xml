@@ -13,8 +13,8 @@
     <description>AOP、Spring Event 桥接、异步优先级队列、MDC</description>
 
     <properties>
-        <!-- AOP/SpEL 已补切面测试；优先级执行器仍缺测试，见 ISSUE-013 -->
-        <jacoco.minimum>0.60</jacoco.minimum>
+        <!-- AOP/SpEL/事件桥接/优先级执行器均有测试，覆盖率 92% -->
+        <jacoco.minimum>0.90</jacoco.minimum>
     </properties>
 
     <dependencies>
