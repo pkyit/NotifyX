@@ -42,10 +42,16 @@
 - **状态**：OPEN（P1 持续改进）
 - **现象**：iter-03 实测 core 67.7%、logback 85.2%、autoconfigure 41.7%；
   设计书 §17.3 要求全局 ≥ 80%、core ≥ 90%。
-- **证据**：`notifyx-core/target/site/jacoco/jacoco.csv` 汇总（816/1205 行）。
+- **证据**：各模块 `target/site/jacoco/jacoco.csv`。
 - **影响**：core 是指纹/限流/模板/熔断等隐蔽 bug 高发区，覆盖率不足会以「去重静默失效」形式暴露。
-- **计划**：优先补 `NotifyPipeline` 分支（重试/熔断/失败落盘）、漏斗 6 个 Filter 的组合行为、
-  模板引擎边界；每轮提升后同步抬 `jacoco.minimum`。
+- **进展**：
+  - iter-03：core 52.9% → 67.7%（+7 个测试类）；门禁 65%；
+  - iter-06：webhook 84.7%（门禁 80%）；
+  - iter-10：core 约 72%（文件存储测试）；
+  - iter-11：email 79%（门禁 75%）；
+  - iter-12：spring 21.6% → 61.8%（切面/SpEL 测试），门禁 20% → 60%。
+- **仍缺**：core 目标 90%；spring 的 `PriorityNotifyExecutor` 未测（补后可到 75%+）；
+  autoconfigure 41.7%（大量配置 POJO getter/setter，价值低，可考虑排除）。
 
 ## ISSUE-004 Spring Event 桥接（L3）与 MDC 未实现（§8.4 / §15.3）
 - **状态**：CLOSED（iter-04）
