@@ -1,0 +1,81 @@
+package io.github.pkyit.notifyx.autoconfigure;
+
+import java.time.Duration;
+import java.util.Objects;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
+import io.github.pkyit.notifyx.core.model.Level;
+import io.github.pkyit.notifyx.core.model.NotifyEvent;
+import io.github.pkyit.notifyx.core.model.SendResult;
+
+/**
+ * Micrometer 指标实现（前缀 {@code notifyx.}）。
+ *
+ * <p>标签只使用低基数维度：channel / scene / status / source / reason / level。</p>
+ *
+ * <p>@implNote 线程安全（Micrometer 计量器本身线程安全）。</p>
+ *
+ * @since 1.0
+ */
+public final class MicrometerNotifyMetrics implements NotifyMetrics {
+
+    private final MeterRegistry registry;
+
+    /**
+     * 构造指标出口。
+     *
+     * @param registry 计量注册表
+     */
+    public MicrometerNotifyMetrics(MeterRegistry registry) {
+        this.registry = Objects.requireNonNull(registry, "registry");
+    }
+
+    @Override
+    public void eventReceived(NotifyEvent event, String source) {
+        Counter.builder("notifyx.event.received")
+                .tag("scene", event.scene())
+                .tag("level", event.level().name())
+                .tag("source", source)
+                .register(registry)
+                .increment();
+    }
+
+    @Override
+    public void sendResult(String channel, String scene, SendResult.Status status, Duration cost) {
+        String statusTag = status == null ? "unknown" : status.name().toLowerCase();
+        Counter.builder("notifyx.send.total")
+                .tag("channel", channel)
+                .tag("scene", scene)
+                .tag("status", statusTag)
+                .register(registry)
+                .increment();
+        if (cost != null && !cost.isZero()) {
+            Timer.builder("notifyx.send.duration")
+                    .tag("channel", channel)
+                    .tag("scene", scene)
+                    .register(registry)
+                    .record(cost);
+        }
+    }
+
+    @Override
+    public void queueDiscarded(String reason, Level level) {
+        Counter.builder("notifyx.queue.discarded")
+                .tag("reason", reason)
+                .tag("level", level == null ? "UNKNOWN" : level.name())
+                .register(registry)
+                .increment();
+    }
+
+    @Override
+    public void filterRejected(String filter, String scene) {
+        Counter.builder("notifyx.filter.rejected")
+                .tag("filter", filter)
+                .tag("scene", scene)
+                .register(registry)
+                .increment();
+    }
+}

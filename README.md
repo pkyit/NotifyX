@@ -1,121 +1,173 @@
 # NotifyX
 
-业务语义层告警通知平台 —— 一个可插拔、松耦合的 Spring Boot 3 告警 starter。
+**业务语义层告警通知平台** —— 在业务代码里埋语义点，用一行代码 / 一个注解，把「业务发生了什么」可靠地送到人手里。
 
-业务代码只描述「发生了什么」，投递到哪里、怎么投、失败了怎么办，全部交给可替换的组件决定。
+监控体系盯的是「进程还活着吗」，NotifyX 盯的是「业务还正常吗」：订单创建失败、支付回调超时、对账不平、账号开通通知。
 
-## 特性
+> 架构基线见 [docs/design.md](docs/design.md)（v1.0 评审版）。实现与文档冲突时，以文档章节号为准。
 
-- **事件与通道解耦**：`AlertEvent` 是唯一数据契约，`AlertChannel` 是唯一出口，二者互不知晓实现。
-- **SPI 扩展**：实现 `AlertChannel` 并注册成 Bean，自动被发现，无需改一行核心代码。
-- **全量可替换**：所有自动装配的 Bean 都带 `@ConditionalOnMissingBean`，业务方可以接管调度器、限流器、模板。
-- **内置通道**：日志通道（默认开）、通用 Webhook 通道（按需开）。
-- **异步 + 背压**：独立线程池投递，队列满时回退到调用方线程，不静默丢告警。
-- **故障隔离**：单个通道抛异常不影响其它通道，也不影响业务线程。
-- **限流去重**：基于 `fingerprint` 的滑动窗口限流，抑制同一错误刷屏。
-- **零侵入**：不依赖 AOP、不扫描注解，业务里显式调用 `AlertTemplate` 即可。
+## 为什么不是又一个日志框架
 
-## 架构
-
-```
-业务代码 ──► AlertTemplate ──► AlertEvent
-                                   │
-                                   ▼
-                           AlertDispatcher
-                    过滤(minLevel) ─► 限流(fingerprint) ─► 线程池
-                                   │
-              ┌────────────────────┼────────────────────┐
-              ▼                    ▼                    ▼
-      LoggingAlertChannel   WebhookAlertChannel   你的通道(SPI)
-```
-
-## 模块
-
-| 模块 | 说明 |
+| 常见做法 | 问题 |
 | --- | --- |
-| `notifyx-core` | 事件模型、通道 SPI、调度器、限流器；不依赖 Spring |
-| `notifyx-spring-boot-autoconfigure` | 配置属性、自动装配、内置通道 |
-| `notifyx-spring-boot-starter` | 业务方唯一需要引入的依赖 |
-| `notifyx-demo` | 最小可运行示例 |
+| `mailService.send(...)` 散落在业务里 | 换渠道要改代码发版 |
+| 直接调钉钉 webhook | 死循环异常 3 分钟发 2 万条，账号被封 |
+| 出问题查「谁给谁发过什么」 | 没有审计，答不上来 |
+| 通知风暴时止血 | 只能重启或改代码 |
+
+NotifyX 把「发送」收口成一条固定责任链：**场景路由 → 免打扰 → 去重 → 限流 → 投递 → 重试 → 熔断 → 审计**，业务只声明 `scene`。
 
 ## 快速开始
+
+**1. 引依赖**
 
 ```xml
 <dependency>
     <groupId>io.github.pkyit</groupId>
-    <artifactId>notifyx-spring-boot-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <artifactId>notifyx-spring-boot3-starter</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
+<dependency>
+    <groupId>io.github.pkyit</groupId>
+    <artifactId>notifyx-channel-log</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
 
+**2. 配 3 行 YAML**
+
+```yaml
+notifyx:
+  scenes:
+    ORDER_CREATE_FAIL:
+      level: ERROR
+      channels: [log]
+      receivers: [ops@example.com]
+      silent-window: 5m
+```
+
+**3. 写一行代码**
+
 ```java
-@RequiredArgsConstructor
-@RestController
-public class PayController {
+@Service
+public class OrderService {
 
-    private final AlertTemplate alertTemplate;
+    private final NotifyKit notifyKit;
 
-    @PostMapping("/pay/callback")
-    public void callback(@RequestBody PayCallback callback) {
+    public OrderService(NotifyKit notifyKit) {
+        this.notifyKit = notifyKit;
+    }
+
+    public Order create(OrderCmd cmd) {
         try {
-            payService.handle(callback);
+            return doCreate(cmd);
         } catch (Exception ex) {
-            alertTemplate.error("支付回调失败")
-                    .content(ex.getMessage())
-                    .tag("biz", "payment")
-                    .attribute("orderId", callback.orderId())
-                    .send();
-            throw ex;
+            notifyKit.alarm("ORDER_CREATE_FAIL", ex, Map.of("orderId", cmd.getOrderNo()));
+            throw ex;   // ★ 异常照常抛出，NotifyX 只做旁路观察
         }
     }
 }
 ```
 
-## 配置
+没有 Redis、没有 MQ、没有数据库、没有 Admin —— 应用照常启动，通知照常发出。
+
+## 核心概念
+
+| 术语 | 含义 |
+| --- | --- |
+| `scene` | 场景码，全局唯一锚点，模板/通道/接收人/静默期都挂在它上面，`^[A-Z][A-Z0-9_]{0,63}$` |
+| `NotifyEvent` | 一次业务语义发生，不可变、可序列化 |
+| `NotifyChannel` | 渠道 SPI：email / webhook / log / 自定义 |
+| `EventFilter` | 责任链节点，顺序固定，用户可插 900+ |
+| `dedupeKey` | 指纹，`sha256(scene ‖ bizId ‖ md5(sorted(params)))`，跨实例可复现 |
+
+## 架构
+
+```
+业务代码 ──► NotifyKit（门面）
+                │
+                ▼
+          有界优先级队列（Level 降序，drop-lowest）
+                │
+                ▼
+  ① 全局静默 → ② 场景路由 → ③ 免打扰 → ④ 去重
+                → ⑤ 场景限流 → ⑥ 全局限流 → 用户 Filter(900+)
+                │
+                ▼
+        渲染（按渠道格式）→ fan-out（receiver × channel）
+                │
+                ▼
+     渠道发送（指数退避 + 抖动 + 熔断）→ 审计 → 失败落盘
+```
+
+**CRITICAL 旁路矩阵**：直通免打扰与限流、不聚合；去重窗口减半且不超过 60 秒（既不失聪也不刷屏）。
+
+## 模块
+
+| 模块 | 说明 | 依赖纪律 |
+| --- | --- | --- |
+| `notifyx-bom` | 统一版本 | — |
+| `notifyx-core` | 模型 / SPI / 指纹 / 限流 / 模板 / 脱敏 | **仅 SLF4J**，ArchUnit 强制 |
+| `notifyx-spring` | AOP 注解、SpEL、优先级队列 | core + spring |
+| `notifyx-spring-boot3-autoconfigure` | 自动装配、配置属性、诊断 | 不直接依赖任何渠道 |
+| `notifyx-spring-boot3-starter` | 业务方唯一依赖 | 空聚合 |
+| `notifyx-channel-log` | 兜底日志渠道 | core |
+| `notifyx-channel-email` | Jakarta Mail | core + jakarta.mail |
+| `notifyx-channel-webhook` | 通用 HTTP + HMAC 签名 | core |
+| `notifyx-sample` | 可运行验收示例 | starter + 三渠道 |
+
+## 接入方式
+
+| 层级 | 方式 | 侵入度 |
+| --- | --- | --- |
+| L2 | `@AlarmProtect(scene = "PAY_CALLBACK_FAIL")` / `@NotifyOn(scene = "...", when = "#r.code != 0")` | 一个注解 |
+| L4 | `notifyKit.alarm(scene, ex, ctx...)` / `notifyKit.send(scene, params)` | 一行调用 |
+
+注解语义：`@AlarmProtect` 只在抛异常时触发，**异常原样抛出**；`@NotifyOn` 在 SpEL 条件为真或抛异常时触发，返回值原样返回。切面内部任何异常都被吞掉并记 warn，绝不影响业务。
+
+## 配置（节选）
 
 ```yaml
 notifyx:
   enabled: true
-  source: ${spring.application.name}   # 事件来源
-  min-level: WARN                      # 低于该级别直接丢弃
   async:
     enabled: true
-    core-pool-size: 2
-    max-pool-size: 8
-    queue-capacity: 1024
-    keep-alive: 60s
-    thread-name-prefix: notifyx-
-  rate-limit:
+    core-pool-size: 4
+    queue-capacity: 4096      # 软上限，满了丢优先级最低的
+    shutdown-await: 10s
+  dedupe:
     enabled: true
-    max-events: 10                     # 窗口内最多投递次数
-    window: 1m                         # 按 fingerprint 计数
+    max-entries: 100000
+  rate-limit:
+    rules:
+      - scene: ORDER_CREATE_FAIL
+        limit: 10
+        window: 1m
+      - global: true
+        limit: 100
+        window: 1m
+  quiet-hours:
+    enabled: true
+    from: "22:00"
+    to: "09:00"
+    timezone: Asia/Shanghai
+    critical-bypass: true
+  global-mute:
+    enabled: false            # 一键止血，运行时可由 Admin 切换
   channels:
-    log:
+    email:
       enabled: true
-    webhook:
-      enabled: false
-      url: https://your-alert-gateway/hook
-      connect-timeout: 2s
-      timeout: 3s
-      headers:
-        X-Alert-Token: xxx
+      host: smtp.example.com
+      port: 465
+      ssl: true
 ```
 
-| 配置 | 默认值 | 说明 |
-| --- | --- | --- |
-| `notifyx.enabled` | `true` | 总开关 |
-| `notifyx.min-level` | `WARN` | 最低投递级别 |
-| `notifyx.source` | `application` | 默认事件来源 |
-| `notifyx.async.enabled` | `true` | 关闭后同步投递 |
-| `notifyx.rate-limit.enabled` | `false` | 滑动窗口限流 |
-| `notifyx.channels.log.enabled` | `true` | 日志通道 |
-| `notifyx.channels.webhook.enabled` | `false` | Webhook 通道 |
+完整字段见各 `*Properties` 类（IDE 里敲 `notifyx.` 有补全）。
 
-## 扩展：自定义通道
+## 扩展：写一个渠道（目标 < 80 行）
 
 ```java
-@Component
-public class DingTalkChannel implements AlertChannel {
+public class DingTalkChannel implements NotifyChannel {
 
     @Override
     public String name() {
@@ -123,38 +175,57 @@ public class DingTalkChannel implements AlertChannel {
     }
 
     @Override
-    public boolean supports(AlertEvent event) {
-        return event.level().atLeast(AlertLevel.ERROR);   // 只接收 ERROR 及以上
+    public RenderFormat preferredFormat() {
+        return RenderFormat.MARKDOWN;
     }
 
     @Override
-    public void send(AlertEvent event) throws Exception {
-        // 调用钉钉机器人；抛异常会被调度器隔离
+    public SendResult send(NotifyContext ctx) throws ChannelException {
+        // ctx.renderedTitle() / ctx.renderedContent() 已经渲染好
+        // 打包报文 → 签名 → POST → 按错误码分类抛 ChannelAuthException / ChannelTimeoutException ...
     }
 }
 ```
 
-自定义通道会被 `ObjectProvider<AlertChannel>` 自动收集，按 `order()` 排序执行。
+注册成 Bean 即可被发现；`nonRetryable()` 返回的异常类型不会重试，其余按指数退避重试。
 
-## 运行示例
+## 扩展：插一个 Filter
 
-```bash
-mvn clean package
-mvn -pl notifyx-demo spring-boot:run
-
-curl "http://localhost:18080/demo/alert?level=ERROR&message=磁盘快满了"
-curl "http://localhost:18080/demo/business-error"
+```java
+@Bean
+public EventFilter debugOnlyFilter() {
+    return new EventFilter() {
+        public String name() { return "debug-only"; }
+        public int order() { return 900; }          // 900+ 是用户区
+        public FilterVerdict doFilter(FilterContext ctx) {
+            return ctx.event().tags().containsKey("debug")
+                    ? FilterVerdict.pass() : FilterVerdict.reject("not-debug");
+        }
+    };
+}
 ```
 
-日志通道的 logger 名称固定为 `ALERT`，可以单独配置输出文件、采集规则与告警。
+## 当前版本范围（v1.0.0-SNAPSHOT）
 
-## Roadmap
+已实现（对应设计书 P0/P1 的 SDK 部分）：
 
-- [ ] 失败重试与死信队列
-- [ ] Micrometer 指标（投递次数、失败次数、耗时）
-- [ ] 钉钉 / 飞书 / 企业微信开箱通道
-- [ ] 分布式限流（Redis）
-- [ ] 基于注解的声明式上报（可选模块）
+- core：`NotifyEvent` / `Level` / `NotifyContext` / `SendResult` / 异常体系 / 指纹算法 / 模板引擎 / 内存去重与限流 / 脱敏 / ULID
+- 责任链：全局静默、场景路由、免打扰、去重（含失败释放）、场景限流、全局限流
+- 执行层：优先级队列（drop-lowest）、指数退避 + 抖动、按渠道熔断、审计、失败落盘接口
+- 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
+- 渠道：log（默认开）、email、webhook（HMAC-SHA256 + 时间戳防重放 + 主机白名单）
+- 自动装配：全量 `@ConditionalOnMissingBean`、零依赖启动测试（T13）、Micrometer 指标
+
+规划中（设计书后续阶段）：Redis 分布式去重/限流、MQ 总线与 consumer、MyBatis-Plus 审计落库、Admin 控制台、IM 渠道（钉钉/企微/飞书）、sms4j 适配、Logback Appender。
+
+## 构建与测试
+
+```bash
+mvn clean verify                        # 编译 + 单测
+mvn -pl notifyx-sample spring-boot:run  # 启动示例（需先 mvn install）
+curl "http://localhost:18080/demo/notify"
+curl "http://localhost:18080/demo/storm?count=1000"
+```
 
 ## License
 

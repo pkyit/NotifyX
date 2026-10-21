@@ -1,34 +1,18 @@
 target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-
-### IntelliJ IDEA ###
-.idea/
-*.iws
-*.iml
-*.ipr
-
-### Eclipse ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### VS Code ###
-.vscode/
-
-### macOS ###
-.DS_Store
-
-### Windows ###
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-### Logs ###
+*.class
 *.log
 logs/
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.classpath
+.project
+.settings
+.factorypath
+.springBeans
+.sts4-cache
+.DS_Store
+Thumbs.db
+Desktop.ini

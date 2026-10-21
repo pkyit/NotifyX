@@ -5,31 +5,57 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.pkyit</groupId>
-    <artifactId>notifyx</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <artifactId>notifyx-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>notifyx</name>
-    <description>可插拔、松耦合的 Spring Boot 3 告警 starter</description>
+    <name>NotifyX</name>
+    <description>业务语义层告警通知平台：SDK + 责任链管线 + 多渠道</description>
     <url>https://github.com/pkyit/NotifyX</url>
+    <inceptionYear>2026</inceptionYear>
 
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
             <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
         </license>
     </licenses>
 
+    <developers>
+        <developer>
+            <id>pkyit</id>
+            <name>pkyit</name>
+            <url>https://github.com/pkyit</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git@github.com:pkyit/NotifyX.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/pkyit/NotifyX.git</developerConnection>
+        <url>https://github.com/pkyit/NotifyX</url>
+    </scm>
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/pkyit/NotifyX/issues</url>
+    </issueManagement>
+
     <modules>
+        <module>notifyx-bom</module>
         <module>notifyx-core</module>
-        <module>notifyx-spring-boot-autoconfigure</module>
-        <module>notifyx-spring-boot-starter</module>
-        <module>notifyx-demo</module>
+        <module>notifyx-spring</module>
+        <module>notifyx-spring-boot3-autoconfigure</module>
+        <module>notifyx-spring-boot3-starter</module>
+        <module>notifyx-channel-log</module>
+        <module>notifyx-channel-email</module>
+        <module>notifyx-channel-webhook</module>
+        <module>notifyx-sample</module>
     </modules>
 
     <properties>
         <java.version>17</java.version>
-        <spring-boot.version>3.3.5</spring-boot.version>
+        <spring-boot.version>3.5.16</spring-boot.version>
+        <archunit.version>1.3.0</archunit.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.release>${java.version}</maven.compiler.release>
@@ -51,12 +77,31 @@
             </dependency>
             <dependency>
                 <groupId>io.github.pkyit</groupId>
-                <artifactId>notifyx-spring-boot-autoconfigure</artifactId>
+                <artifactId>notifyx-spring</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.pkyit</groupId>
-                <artifactId>notifyx-spring-boot-starter</artifactId>
+                <artifactId>notifyx-spring-boot3-autoconfigure</artifactId>
+                <version>${project.version}</version>
+            </dependency>            <dependency>
+                <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-spring-boot3-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-channel-log</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-channel-email</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-channel-webhook</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
@@ -78,6 +123,20 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>3.10.1</version>
+                    <configuration>
+                        <doclint>none</doclint>
+                        <quiet>true</quiet>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.springframework.boot</groupId>

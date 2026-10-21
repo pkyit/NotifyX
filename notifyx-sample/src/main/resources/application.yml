@@ -1,0 +1,99 @@
+spring:
+  application:
+    name: notifyx-sample
+
+server:
+  port: 18080
+
+notifyx:
+  enabled: true
+  env: dev
+  tenant: sample
+  async:
+    enabled: true
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 4096
+    shutdown-await: 10s
+  defaults:
+    level: WARN
+    silent-window: 5m
+    channels: [log]
+  scenes:
+    ORDER_CREATE_FAIL:
+      level: ERROR
+      channels: [log]
+      template: order-fail
+      receivers: [ops@example.com]
+      silent-window: 1m
+      retry: 2
+    UNCAUGHT_EXCEPTION:
+      level: ERROR
+      channels: [log]
+      silent-window: 10m
+  templates:
+    engine: simple
+    templates:
+      order-fail:
+        title: "【订单异常】${bizId}"
+        content: |
+          订单 ${bizId} 创建失败
+          原因：${reason}
+          时间：${occurredAt}
+          实例：${instanceId}
+  dedupe:
+    enabled: true
+    default-window: 1m
+    max-entries: 100000
+  rate-limit:
+    enabled: true
+    rules:
+      - scene: ORDER_CREATE_FAIL
+        limit: 10
+        window: 1m
+      - global: true
+        limit: 100
+        window: 1m
+  retry:
+    enabled: true
+    base-delay: 1s
+    max-delay: 10s
+    jitter: 0.5
+    max-attempts: 2
+  quiet-hours:
+    enabled: false
+    from: "22:00"
+    to: "09:00"
+    timezone: Asia/Shanghai
+    defer: true
+    critical-bypass: true
+  global-mute:
+    enabled: false
+    mute-critical: true
+  channels:
+    log:
+      enabled: true
+      logger-name: NOTIFYX_FALLBACK
+    email:
+      enabled: false
+      host: smtp.example.com
+      port: 465
+      ssl: true
+      username: noreply@example.com
+      password: change-me
+      from: noreply@example.com
+    webhook:
+      enabled: false
+      url: https://hooks.example.com/notifyx
+      secret: change-me
+  mask:
+    enabled: true
+    before-audit: true
+  diagnostics:
+    banner: true
+    fail-fast: false
+
+logging:
+  level:
+    NOTIFYX_FALLBACK: INFO
+    NOTIFYX_AUDIT: INFO
