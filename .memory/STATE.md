@@ -1,9 +1,9 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-15 完成：NotifyEnvelope 契约与 JSON 编解码）
+> 更新时间：2026-10-22（iter-16 完成：失败自动补偿）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 12 个模块，179 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 12 个模块，186 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -53,7 +53,7 @@
 - [x] 优先级队列语义 + Micrometer 指标测试 —— iter-13（spring 92.2%、autoconfigure 62.1%）
 - [x] 管线重试/熔断 + 事件边界测试 —— iter-14（core 覆盖率 78%，门禁 76%）
 - [x] `NotifyEnvelope` 契约 + 零依赖 JSON 编解码 —— iter-15（落盘写入可还原报文）
-- [ ] 失败自动补偿 —— ISSUE-015（runner 待做）
+- [x] 失败自动补偿 —— iter-16（CAS→重投→SENT/DEAD + 退避，默认关闭；ISSUE-015 关闭）
 - [ ] JDBC store —— P2（信创库适配）
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
 
@@ -85,10 +85,10 @@ sms4j 适配。
 
 ## 5. 下一步队列
 
-1. **补偿能力**：`FailureCompensationRunner`（ISSUE-015；`NotifyEnvelope` 已就绪）。
-2. **测试债**：core 79.8% → 90%（defer/failureStore/onSuccess 回调、NotifyContext builder）；T1–T24 剩余用例。
+1. **测试债**：core 79.8% → 90%（defer/failureStore/onSuccess 回调、NotifyContext builder）；T1–T24 剩余用例。
+2. **P2 起点的准备**：Redis store / JDBC store / MQ 总线（需要交付环境与时间）。
 3. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-15 合并后）。工作分支命名见 README。
+`master`（iter-16 合并后）。工作分支命名见 README。

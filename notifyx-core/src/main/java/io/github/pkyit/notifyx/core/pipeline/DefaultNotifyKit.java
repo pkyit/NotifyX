@@ -80,6 +80,17 @@ public final class DefaultNotifyKit implements NotifyKit {
         }
     }
 
+    /**
+     * 同步投递并返回结果（失败补偿等需要明确成败的场景使用）。
+     *
+     * @param event 事件
+     * @return 是否成功投递
+     */
+    public boolean deliverSync(NotifyEvent event) {
+        Objects.requireNonNull(event, "event");
+        return pipeline.handle(event);
+    }
+
     @Override
     public void sendAsync(NotifyEvent event) {
         Objects.requireNonNull(event, "event");

@@ -47,4 +47,13 @@ class FailureStoreSelectionTest {
                     assertThat(((LocalFileFailureStore) store).root()).isEqualTo(tempDir.toAbsolutePath());
                 });
     }
+
+    @Test
+    @DisplayName("补偿器默认不装配，显式开启后装配")
+    void shouldCreateCompensationRunnerOnlyWhenEnabled() {
+        runner.run(context -> assertThat(context).doesNotHaveBean(FailureCompensationRunner.class));
+
+        runner.withPropertyValues("notifyx.fallback.compensation.enabled=true")
+                .run(context -> assertThat(context).hasSingleBean(FailureCompensationRunner.class));
+    }
 }
