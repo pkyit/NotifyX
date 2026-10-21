@@ -41,10 +41,10 @@
 **用途规划**：P1 之后做「多实例重复发送」验证（§11.5 选型表）、优雅关闭滚动发布验证、
 Admin/Consumer 部署验证。SDK 阶段不依赖 k8s。
 
-## 4. 构建基线（iter-04 实测）
+## 4. 构建基线（iter-05 实测）
 
 ```text
-mvn -B clean verify   → BUILD SUCCESS，11 模块，92 tests，0 failures
+mvn -B clean verify   → BUILD SUCCESS，11 模块，106 tests，0 failures
                          Spotless 0 violation / Checkstyle 0 violation
                          JaCoCo：core 67.7%（门禁 65%）、spring 21.6%（门禁 20%）、
                                  autoconfigure 41.7%（门禁 40%）、logback 85.2%（门禁 80%）

@@ -45,6 +45,7 @@ public class NotifyxProperties {
     private final Spel spel = new Spel();
     private final Diagnostics diagnostics = new Diagnostics();
     private final Events events = new Events();
+    private final Actuator actuator = new Actuator();
 
     public boolean isEnabled() {
         return enabled;
@@ -144,6 +145,10 @@ public class NotifyxProperties {
 
     public Events getEvents() {
         return events;
+    }
+
+    public Actuator getActuator() {
+        return actuator;
     }
 
     /** 异步执行配置。 */
@@ -987,6 +992,38 @@ public class NotifyxProperties {
 
         public Map<String, String> getMappings() {
             return mappings;
+        }
+    }
+
+    /** Actuator 配置（设计书 15.2）。 */
+    public static class Actuator {
+        private final Health health = new Health();
+
+        public Health getHealth() {
+            return health;
+        }
+
+        /** 健康端点配置。 */
+        public static class Health {
+            private boolean enabled = true;
+            /** 是否真实探活渠道；默认关闭，避免健康检查制造流量与费用。 */
+            private boolean probeEnabled;
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public boolean isProbeEnabled() {
+                return probeEnabled;
+            }
+
+            public void setProbeEnabled(boolean probeEnabled) {
+                this.probeEnabled = probeEnabled;
+            }
         }
     }
 }

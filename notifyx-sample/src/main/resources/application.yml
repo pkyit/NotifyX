@@ -1,14 +1,28 @@
-﻿spring:
+spring:
   application:
     name: notifyx-sample
 
 server:
   port: 18080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
 
 notifyx:
   enabled: true
   env: dev
   tenant: sample
+  actuator:
+    health:
+      enabled: true
+      probe-enabled: false    # 健康检查默认不真发消息，避免制造流量与费用
   async:
     enabled: true
     core-pool-size: 4

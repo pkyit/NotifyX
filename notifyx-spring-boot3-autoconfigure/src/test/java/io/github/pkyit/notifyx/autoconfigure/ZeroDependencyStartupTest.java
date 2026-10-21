@@ -42,6 +42,8 @@ class ZeroDependencyStartupTest {
             assertThat(context).hasSingleBean(NotifyMetrics.class);
             assertThat(context).hasSingleBean(TraceContext.class);
             assertThat(context).hasSingleBean(NotifyxEventBridge.class);
+            assertThat(context).hasSingleBean(NotifyxLifecycle.class);
+            assertThat(context).hasSingleBean(NotifyxDiagnostics.class);
             assertThat(context.getBeansOfType(NotifyChannel.class)).containsKey("notifyxLogChannel");
         });
     }
