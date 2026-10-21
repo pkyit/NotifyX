@@ -7,18 +7,18 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.Appender;
-import ch.qos.logback.core.spi.AppenderAttachable;
-
 import org.slf4j.ILoggerFactory;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 
 import io.github.pkyit.notifyx.core.api.NotifyKit;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
+import ch.qos.logback.core.spi.AppenderAttachable;
 
 /**
  * Spring 绑定器：把容器里的 {@link NotifyKit} 注入到已挂载的 {@link NotifyxAppender}（设计书 8.1）。

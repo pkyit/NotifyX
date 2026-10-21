@@ -268,12 +268,22 @@ NotifyX 的版本号**不跟随** Spring Boot：`1.x` 表示 SDK 自身 API 稳�
 ## 构建与测试
 
 ```bash
-mvn clean verify                        # 编译 + 单测
+mvn clean verify                        # 编译 + 单测 + 格式/静态规则/覆盖率门禁
 mvn -pl notifyx-sample spring-boot:run  # 启动示例（需先 mvn install）
 curl "http://localhost:18080/demo/notify"
 curl "http://localhost:18080/demo/storm?count=1000"
 curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 ```
+
+`verify` 阶段执行三道门禁（§17.3）：
+
+| 门禁 | 插件 | 规则 |
+| --- | --- | --- |
+| 格式 | Spotless | 未使用 import、import 顺序、行尾空白、文件末尾换行 |
+| 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
+| 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
+
+当前基线：**54 个 core 测试 + 20 个 logback 测试 + 3 个装配测试**，CI 矩阵 JDK 17/21。
 
 ## 发布
 

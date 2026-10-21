@@ -3,7 +3,6 @@ package io.github.pkyit.notifyx.logback;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -12,16 +11,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.slf4j.Marker;
+
+import io.github.pkyit.notifyx.core.api.NotifyKit;
+import io.github.pkyit.notifyx.core.model.NotifyEvent;
+
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.classic.spi.ThrowableProxyUtil;
 import ch.qos.logback.core.UnsynchronizedAppenderBase;
-
-import org.slf4j.Marker;
-
-import io.github.pkyit.notifyx.core.api.NotifyKit;
-import io.github.pkyit.notifyx.core.model.NotifyEvent;
 
 /**
  * L0 接入：把日志变成 NotifyX 事件（设计书 8.1 / T7）。

@@ -10,6 +10,7 @@ import io.github.pkyit.notifyx.core.exception.ChannelProtocolException;
 import io.github.pkyit.notifyx.core.model.SendResult;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.NotifyContext;
+
 import jakarta.mail.AuthenticationFailedException;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;

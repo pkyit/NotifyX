@@ -44,10 +44,13 @@ Admin/Consumer 部署验证。SDK 阶段不依赖 k8s。
 ## 4. 构建基线（iter-00 实测）
 
 ```text
-mvn -B clean verify   → BUILD SUCCESS，10 模块，26 tests，0 failures
-构建耗时（首次，含下载）约 1~2 分钟
+mvn -B clean verify   → BUILD SUCCESS，11 模块，73 tests，0 failures
+                         Spotless 0 violation / Checkstyle 0 violation
+                         JaCoCo：core 67.7%（门禁 65%）、logback 85.2%（门禁 80%）、autoconfigure 41.7%（门禁 40%）
+构建耗时（增量）约 40 秒；首次含插件下载约 2 分钟
 ```
 
-## 5. CI 目标矩阵（§17.4，尚未落地，见 ISSUE-003）
+## 5. CI 矩阵（§17.4）
 
-Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
+`.github/workflows/ci.yml`：Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
+当前仓库托管在 Gitee，GitHub Actions 不会自动触发；Gitee Go 可直接执行 `mvn -B -ntp verify`。

@@ -2,9 +2,6 @@ package io.github.pkyit.notifyx.logback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.LoggerContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +10,10 @@ import org.slf4j.Marker;
 import org.slf4j.MarkerFactory;
 
 import io.github.pkyit.notifyx.core.model.NotifyEvent;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 
 /**
  * Appender 行为测试：映射、过滤、丢弃、排空与 T7 防自递归。

@@ -5,7 +5,6 @@ import java.io.StringWriter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-
 import java.util.concurrent.RejectedExecutionException;
 
 import org.slf4j.Logger;

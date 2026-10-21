@@ -3,13 +3,14 @@ package io.github.pkyit.notifyx.autoconfigure;
 import java.time.Duration;
 import java.util.Objects;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
 import io.github.pkyit.notifyx.core.model.Level;
 import io.github.pkyit.notifyx.core.model.NotifyEvent;
 import io.github.pkyit.notifyx.core.model.SendResult;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * Micrometer 指标实现（前缀 {@code notifyx.}）。
