@@ -1,13 +1,14 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-01 完成：Logback Appender）
+> 更新时间：2026-10-22（iter-02 完成：发布链路）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
-> 构建基线：`mvn -B clean verify` 通过，11 个模块，43 个测试。
+> 构建基线：`mvn -B clean verify` 通过，11 个模块，43 个测试；
+> `mvn -Prelease -Dgpg.skip=true verify` 通过，sources/javadoc 产物齐全。
 
 ## 1. 一句话现状
 
-责任链管线、三渠道（log/email/webhook）、注解接入、L0 日志接入、自动装配已经能跑并有测试；
-**发布链路、质量门禁、Spring Event 桥接 / MDC 尚未完成**，这三项是 P0 剩余的主要缺口。
+责任链管线、三渠道（log/email/webhook）、注解接入、L0 日志接入、自动装配、发布链路都已就绪；
+**质量门禁 / CI、Spring Event 桥接 / MDC 尚未完成**，这是 P0 剩余的两个缺口。
 P1 的聚合、升级、actuator health、启动诊断表也在排队。
 
 ## 2. 已实现（按设计书章节）
@@ -33,7 +34,7 @@ P1 的聚合、升级、actuator health、启动诊断表也在排队。
 ### P0 剩余
 
 - [x] **Logback Appender（L0，§8.1 / T7）** —— iter-01 完成（含 E2E）
-- [ ] **发布链路（§19.1）**：GPG、central-publishing、source/javadoc jar、POM 元数据校验
+- [x] **发布链路（§19.1）** —— iter-02 完成配置与本地验证（实际 deploy 待 Central 账号 + GPG 私钥）
 - [ ] **质量门禁（§17.3）**：Spotless / Checkstyle / SpotBugs、checkstyle 规则、CI workflow
 - [ ] **Spring Event 桥接（L3，§8.4）+ MDC（§15.3）**
 - [ ] **ADR-001 alias artifact 发布策略**（`notifyx-spring-boot3-starter` relocation）
@@ -62,15 +63,16 @@ sms4j 适配。
 | D-005 | 新增 `notifyx-logback` 模块（设计书模块树未列） | P0 明确要求 Logback Appender，但放进 autoconfigure 会污染依赖方向 |
 | D-007 | Appender 的 `extractBizId` 用子元素而非属性 | logback 1.5 的 model 解析器不把嵌套元素属性写入对象，属性写法静默失效 |
 | D-008 | 内部 logger 前缀硬编码（`io.github.pkyit.notifyx` / `NOTIFYX_`） | 防自递归优先于可配置性；配置化会引入新的自递归风险 |
+| D-009 | starter 增加 `NotifyxStarter` 标记类 | Central 强制要求 sources/javadoc，空模块产不出；用最小标记类闭环 |
 
 ## 5. 下一步队列
 
-1. **iter-02**：发布链路（central-publishing + GPG profile + source/javadoc + POM 元数据）。
-2. **iter-03**：质量门禁 + CI（JDK 17/21 矩阵，`mvn verify`）。
-3. **iter-04**：Spring Event 桥接（L3）+ MDC。
-4. **iter-05**：P1 优雅关闭 + actuator health + 启动诊断表。
-5. **iter-06**：渠道契约测试（webhook HMAC / email），补 ISSUE-010。
+1. **iter-03**：质量门禁 + CI（JDK 17/21 矩阵，`mvn verify`）。
+2. **iter-04**：Spring Event 桥接（L3）+ MDC。
+3. **iter-05**：P1 优雅关闭 + actuator health + 启动诊断表。
+4. **iter-06**：渠道契约测试（webhook HMAC / email），补 ISSUE-010。
+5. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-01 合并后）。工作分支命名见 README。
+`master`（iter-02 合并后）。工作分支命名见 README。

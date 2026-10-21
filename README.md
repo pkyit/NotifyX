@@ -255,7 +255,15 @@ public EventFilter debugOnlyFilter() {
 - L0：`notifyx-logback` Appender（异步有界、噪声过滤、业务主键提取、双重防自递归）
 - 自动装配：全量 `@ConditionalOnMissingBean`、零依赖启动测试（T13）、Micrometer 指标
 
-规划中（设计书后续阶段）：Redis 分布式去重/限流、MQ 总线与 consumer、MyBatis-Plus 审计落库、Admin 控制台、IM 渠道（钉钉/企微/飞书）、sms4j 适配、Logback Appender。
+规划中（设计书后续阶段）：Redis 分布式去重/限流、MQ 总线与 consumer、MyBatis-Plus 审计落库、Admin 控制台、IM 渠道（钉钉/企微/飞书）、sms4j 适配。
+
+## 兼容性
+
+| NotifyX | Boot 3.5（基线） | Boot 4 | JDK 17 | JDK 21 |
+| --- | --- | --- | --- | --- |
+| 1.0.x（开发中） | ✅ | 🧪 编译验证 | ✅ | ✅ |
+
+NotifyX 的版本号**不跟随** Spring Boot：`1.x` 表示 SDK 自身 API 稳定性，支持的 Boot 范围由 `spring-boot.version` property 决定。
 
 ## 构建与测试
 
@@ -264,7 +272,19 @@ mvn clean verify                        # 编译 + 单测
 mvn -pl notifyx-sample spring-boot:run  # 启动示例（需先 mvn install）
 curl "http://localhost:18080/demo/notify"
 curl "http://localhost:18080/demo/storm?count=1000"
+curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 ```
+
+## 发布
+
+发布链路（GPG / Central）只在 `release` profile 激活，日常构建不受影响：
+
+```bash
+mvn -Prelease -Dgpg.skip=true clean package   # 本地验证 sources/javadoc 产物
+mvn -Prelease deploy                          # 上传 Central，人工确认后发布
+```
+
+完整步骤与常见卡点见 [docs/release.md](docs/release.md)。
 
 ## License
 
