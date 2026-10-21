@@ -117,3 +117,18 @@
 - **理由**：配置化会引入「用户写错前缀 → 自递归风暴」的新风险；硬编码覆盖 99.9% 场景。
 - **影响**：示例工程必须用 `com.example.*` logger 才能演示（已改）。见 ISSUE-012。
 - **复审条件**：P1 做诊断表时，评估增加 `exclude-logger-prefixes` 配置并加安全校验。
+
+## D-009 Starter 增加 `NotifyxStarter` 标记类
+
+- **日期**：2026-10-22（iter-02）
+- **状态**：生效
+- **背景**：Central 对 jar packaging 强制要求 `-sources.jar` 与 `-javadoc.jar`。
+  `notifyx-spring-boot3-starter` 是刻意的空聚合模块，source 插件输出
+  “No sources in project. Archive not created.”；只放 `package-info.java` 时 javadoc 直接报
+  `error: No public or protected classes found to document.`，发布链路会卡死。
+- **决策**：加一个不可实例化的 `NotifyxStarter` 标记类 + `package-info.java`；
+  类中明确写「不要引用、不要加逻辑」。
+- **理由**：这是在不破坏「starter 无逻辑」承诺的前提下，让发布链路可闭环的最小改动。
+  另一种做法是 hack source/javadoc 插件强制产空 jar，脆弱且难维护。
+- **影响**：starter jar 多一个 class 文件；用户依赖不变，零行为影响。
+- **复审条件**：若未来 Maven Central 允许空模块豁免，可删除标记类。

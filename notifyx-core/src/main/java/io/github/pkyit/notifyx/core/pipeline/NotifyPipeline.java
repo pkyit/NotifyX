@@ -21,6 +21,7 @@ import io.github.pkyit.notifyx.core.model.RenderFormat;
 import io.github.pkyit.notifyx.core.model.SendResult;
 import io.github.pkyit.notifyx.core.spi.AuditRecord;
 import io.github.pkyit.notifyx.core.spi.AuditRecorder;
+import io.github.pkyit.notifyx.core.spi.DedupeStore;
 import io.github.pkyit.notifyx.core.spi.EventFilter;
 import io.github.pkyit.notifyx.core.spi.FailedRecord;
 import io.github.pkyit.notifyx.core.spi.FailureStore;
@@ -73,7 +74,7 @@ public final class NotifyPipeline {
      * @param store 存储
      * @since 1.0
      */
-    public record DedupeStoreHolder(io.github.pkyit.notifyx.core.spi.DedupeStore store) {
+    public record DedupeStoreHolder(DedupeStore store) {
     }
 
     private NotifyPipeline(Builder builder) {

@@ -14,15 +14,18 @@
 - **关闭方式**：建立 `.memory/`（README/STATE/decisions/issues/env/iterations），并把「每次合并前
   必须写记忆」固化进 `.memory/README.md` 的硬规则。
 
-## ISSUE-002 P0 发布链路完全缺失（§19.1 / §21.2 第 2 步）
-- **状态**：OPEN（计划 iter-02）
+## ISSUE-002 P0 发布链路（§19.1 / §21.2 第 2 步）
+- **状态**：OPEN（iter-02 已把配置与本地验证做完；真正 deploy 缺账号/密钥）
 - **现象**：parent pom 只有依赖管理，没有 `central-publishing-maven-plugin`、没有 GPG、
-  没有 source/javadoc jar 绑定、没有 `distributionManagement`；`mvn deploy` 不可能通过 Central 校验。
-- **证据**：`pom.xml` 第 110–148 行只有 compiler/surefire/javadoc(pluginManagement 但未绑定)/source/boot 插件版本。
+  没有 source/javadoc jar 绑定；`mvn deploy` 不可能通过 Central 校验。
+- **证据**：原 `pom.xml` 只有 compiler/surefire/javadoc(pluginManagement 但未绑定)/source/boot 插件版本。
 - **影响**：P0 验收标准第 ① 条「能发到 Maven Central」无法达成——这是设计书强调的
   「多数开源项目死于最后一步发不出去」的风险 R8。
-- **计划**：iter-02 增加 `<profiles><profile id="release">`，GPG 只在 release profile 激活，
-  本机无密钥时 `-DskipTests` 仍可正常 `verify`；README 写发布手册。
+- **iter-02 进展**：新增 `release` profile（source/javadoc/gpg/central-publishing 0.12.0，
+  `autoPublish=false`）；`mvn -Prelease -Dgpg.skip=true verify` 通过，9 个 jar 模块均产出
+  `-sources.jar` + `-javadoc.jar`；发布手册见 `docs/release.md`。
+- **仍缺（阻塞项）**：Central Portal 账号与 GPG 私钥由交付方提供；实际 `mvn -Prelease deploy`
+  与人工 Publish 需在有凭据的环境执行，本地无法闭环。
 
 ## ISSUE-003 质量门禁与 CI 缺失（§17.3 / §17.4）
 - **状态**：OPEN（计划 iter-03）
@@ -75,11 +78,11 @@
 - **计划**：保留 `design.md` 作为唯一基线，另一个改为指向它的短文件（或在 README 说明关系）。
 
 ## ISSUE-009 POM 元数据与真实托管地址不一致
-- **状态**：OPEN（低优先）
+- **状态**：CLOSED（iter-02）
 - **现象**：`pom.xml` 的 `url` / `scm` / `issueManagement` 全部指向 `github.com/pkyit/NotifyX`，
   而实际 remote 是 `git@gitee.com:pengkaiyan/NotifyX.git`。
 - **影响**：发布到 Central 后，用户点「源码」会 404；SCM 校验（Central 要求）可能失败。
-- **计划**：iter-02 统一为实际域名，或在 README 注明镜像关系。
+- **关闭方式**：url / scm / developer.url / issueManagement 统一改为 Gitee 实际地址。
 
 ## ISSUE-010 渠道契约测试缺失（§18.3）
 - **状态**：OPEN（P0 后续）
