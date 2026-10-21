@@ -6,7 +6,7 @@
 | --- | --- |
 | 项目名 | NotifyX（notification exchange，通知交换层） |
 | 一句话定位 | 在业务代码里埋语义点，用一行代码 / 一个注解 / 一条日志，把「业务发生了什么」可靠地送到人手里 |
-| 仓库 | `git@github.com:pkyit/NotifyX.git` |
+| 仓库 | `git@gitee.com:pengkaiyan/NotifyX.git` |
 | GroupId | `io.github.pkyit` |
 | 包名根 | `io.github.pkyit.notifyx` |
 | 技术基线 | JDK 17（编译目标 17）、Spring Boot 3.5.16、MyBatis-Plus 3.5.x、sms4j 3.3.5 |
