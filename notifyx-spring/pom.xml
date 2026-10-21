@@ -13,8 +13,8 @@
     <description>AOP、Spring Event 桥接、异步优先级队列、MDC</description>
 
     <properties>
-        <!-- AOP/SpEL 尚未补测试；先按当前基线设 ratchet，见 ISSUE-013 -->
-        <jacoco.minimum>0.20</jacoco.minimum>
+        <!-- AOP/SpEL 已补切面测试；优先级执行器仍缺测试，见 ISSUE-013 -->
+        <jacoco.minimum>0.60</jacoco.minimum>
     </properties>
 
     <dependencies>
