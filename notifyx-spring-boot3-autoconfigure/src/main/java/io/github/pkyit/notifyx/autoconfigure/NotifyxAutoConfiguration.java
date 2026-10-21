@@ -26,6 +26,7 @@ import org.springframework.core.env.Environment;
 
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
+import io.github.pkyit.notifyx.core.pipeline.Aggregator;
 import io.github.pkyit.notifyx.core.pipeline.ChannelRegistry;
 import io.github.pkyit.notifyx.core.pipeline.DefaultNotifyKit;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
@@ -300,6 +301,7 @@ public class NotifyxAutoConfiguration {
                                       NotifyMetrics metrics,
                                       NotifyTaskExecutor taskExecutor,
                                       TraceContext traceContext,
+                                      Aggregator aggregator,
                                       Environment environment) {
         List<EventFilter> filters = buildFilters(properties, dedupeStore, rateLimiter);
         NotifyPipeline pipeline = NotifyPipeline.builder()
@@ -323,10 +325,26 @@ public class NotifyxAutoConfiguration {
                         properties.getChannels().getCircuitBreaker().getOpenDuration(),
                         properties.getChannels().getCircuitBreaker().getMaxOpenDuration()))
                 .traceContext(traceContext)
+                .aggregator(aggregator)
                 .build();
+        aggregator.sink(pipeline::handle);
         log.info("notifyx pipeline assembled: filters={}, channels={}", filters.size(),
                 channels.orderedStream().map(NotifyChannel::name).toList());
         return new DefaultNotifyKit(pipeline, taskExecutor, traceContext);
+    }
+
+    /**
+     * 实例内聚合器（设计书 9.5 T0）。默认关闭；多实例场景需 Redis/MQ 才能跨实例聚合。
+     *
+     * @param properties 配置
+     * @return 聚合器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public Aggregator notifyxAggregator(NotifyxProperties properties) {
+        NotifyxProperties.Aggregate config = properties.getAggregate();
+        return new Aggregator(new Aggregator.Config(config.isEnabled(), config.getWindow(),
+                config.getMaxEntries()));
     }
 
     /**
@@ -355,9 +373,10 @@ public class NotifyxAutoConfiguration {
     @ConditionalOnMissingBean
     public NotifyxLifecycle notifyxLifecycle(NotifyTaskExecutor taskExecutor,
                                              ObjectProvider<NotifyChannel> channels,
-                                             NotifyxProperties properties) {
+                                             NotifyxProperties properties,
+                                             Aggregator aggregator) {
         return new NotifyxLifecycle(taskExecutor, channels.orderedStream().toList(),
-                properties.getAsync().getShutdownAwait());
+                properties.getAsync().getShutdownAwait(), aggregator);
     }
 
     /**

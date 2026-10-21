@@ -44,6 +44,7 @@ public class NotifyxProperties {
     private final Mask mask = new Mask();
     private final Spel spel = new Spel();
     private final Diagnostics diagnostics = new Diagnostics();
+    private final Aggregate aggregate = new Aggregate();
     private final Events events = new Events();
     private final Actuator actuator = new Actuator();
 
@@ -141,6 +142,10 @@ public class NotifyxProperties {
 
     public Diagnostics getDiagnostics() {
         return diagnostics;
+    }
+
+    public Aggregate getAggregate() {
+        return aggregate;
     }
 
     public Events getEvents() {
@@ -1024,6 +1029,37 @@ public class NotifyxProperties {
             public void setProbeEnabled(boolean probeEnabled) {
                 this.probeEnabled = probeEnabled;
             }
+        }
+    }
+
+    /** 聚合配置（设计书 9.5，T0 实例内聚合）。 */
+    public static class Aggregate {
+        private boolean enabled;
+        private Duration window = Duration.ofSeconds(10);
+        private int maxEntries = 10_000;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public Duration getWindow() {
+            return window;
+        }
+
+        public void setWindow(Duration window) {
+            this.window = window;
+        }
+
+        public int getMaxEntries() {
+            return maxEntries;
+        }
+
+        public void setMaxEntries(int maxEntries) {
+            this.maxEntries = maxEntries;
         }
     }
 }

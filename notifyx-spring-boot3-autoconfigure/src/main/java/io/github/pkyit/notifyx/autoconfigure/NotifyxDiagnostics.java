@@ -169,6 +169,13 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         if (properties.getDedupe().isEnabled()) {
             builder.append("│   · 去重窗口默认 ").append(properties.getDedupe().getDefaultWindow()).append('\n');
         }
+        if (properties.getAggregate().isEnabled()) {
+            builder.append("│   · 聚合：实例内 ")
+                    .append(properties.getAggregate().getWindow().toSeconds())
+                    .append("s 窗口（多实例不合并，T1/T2 才跨实例）\n");
+        } else {
+            builder.append("│   · 聚合未启用：重复事件只去重不汇总\n");
+        }
     }
 
     private void appendActuatorHint(StringBuilder builder) {

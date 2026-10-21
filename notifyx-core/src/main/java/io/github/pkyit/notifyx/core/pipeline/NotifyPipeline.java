@@ -69,6 +69,7 @@ public final class NotifyPipeline {
     private final Map<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final CircuitConfig circuitConfig;
     private final TraceContext traceContext;
+    private final Aggregator aggregator;
 
     /**
      * {@link DedupeStore} 持有者，便于失败时释放。
@@ -96,6 +97,7 @@ public final class NotifyPipeline {
         this.deferredHandler = builder.deferredHandler;
         this.circuitConfig = builder.circuitConfig;
         this.traceContext = builder.traceContext == null ? TraceContext.none() : builder.traceContext;
+        this.aggregator = builder.aggregator;
     }
 
     /**
@@ -125,6 +127,10 @@ public final class NotifyPipeline {
             FilterContext filterContext = new FilterContext(event, scene, Instant.now(), dedupeKey, silentWindow);
             FilterVerdict verdict = runFilters(event, filterContext);
             if (verdict.decision() == FilterVerdict.Decision.REJECT) {
+                if (aggregator != null && "duplicate".equals(verdict.reason())) {
+                    // 去重命中的事件不丢弃：进入实例内聚合，窗口结束发一条摘要（§9.5 T0）
+                    aggregator.record(event, level, dedupeKey, instanceId);
+                }
                 reject(event, verdict.reason());
                 return;
             }
@@ -507,6 +513,7 @@ public final class NotifyPipeline {
         private DeferredHandler deferredHandler;
         private CircuitConfig circuitConfig = CircuitConfig.defaults();
         private TraceContext traceContext = TraceContext.none();
+        private Aggregator aggregator;
 
         private Builder() {
         }
@@ -594,6 +601,17 @@ public final class NotifyPipeline {
          */
         public Builder traceContext(TraceContext traceContext) {
             this.traceContext = traceContext;
+            return this;
+        }
+
+        /**
+         * 实例内聚合器；null 表示不去重后聚合。
+         *
+         * @param aggregator 聚合器
+         * @return 构建器
+         */
+        public Builder aggregator(Aggregator aggregator) {
+            this.aggregator = aggregator;
             return this;
         }
 
