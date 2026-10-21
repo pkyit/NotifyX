@@ -90,14 +90,15 @@
   E2E：`/actuator/health` 的 notifyx 组件返回 DEGRADED + 内存降级原因。
 
 ## ISSUE-007 聚合（§9.5）与升级（§9.6）未实现
-- **状态**：OPEN（聚合 T0 已完成，升级待做）
+- **状态**：CLOSED（T0 版本完成；T1/T2 属 P2 路线图）
 - **现象**：去重只做「窗口内静默」，没有把被去重的事件聚合成一条摘要；没有「同一场景重复 N 次
-  自动升级 Level」的策略。
+  自动升级 Level/渠道」的策略。
 - **影响**：通知风暴时用户只收到第一条，无法知道「一共发生了 300 次」。
-- **iter-08 进展**：`Aggregator`（T0 实例内窗口聚合，默认关闭）+ 管线去重 REJECT 钩子 +
+- **iter-08**：`Aggregator`（T0 实例内窗口聚合，默认关闭）+ 管线去重 REJECT 钩子 +
   生命周期关闭前汇总；摘要带 `aggregateCount` 等参数与唯一 dedupeKey。
-  5 个测试覆盖窗口收拢/级别取高/分桶/关闭汇总/管线集成。
-- **仍缺**：升级策略（§9.6，按场景连续次数升级级别/渠道）；T1 Redis / T2 MQ 跨实例聚合（P2）。
+- **iter-09**：`EscalationPolicy`（连续 N 次/窗口/upgrade-to 渠道/恢复场景/reset-on-success），
+  管线按场景计数并在升级态改走更高触达渠道；诊断表展示规则数。
+- **仍属 P2**：T1 Redis / T2 MQ 的跨实例聚合与计数（随 store/MQ 模块落地）。
 
 ## ISSUE-008 `docs/design.md` 与 `docs/NotifyX架构设计书.md` 内容重复
 - **状态**：OPEN（待确认）

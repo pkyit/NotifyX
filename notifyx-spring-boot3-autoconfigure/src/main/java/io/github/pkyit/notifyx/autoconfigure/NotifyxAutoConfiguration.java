@@ -29,6 +29,7 @@ import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
 import io.github.pkyit.notifyx.core.pipeline.Aggregator;
 import io.github.pkyit.notifyx.core.pipeline.ChannelRegistry;
 import io.github.pkyit.notifyx.core.pipeline.DefaultNotifyKit;
+import io.github.pkyit.notifyx.core.pipeline.EscalationPolicy;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.NotifyPipeline;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
@@ -302,6 +303,7 @@ public class NotifyxAutoConfiguration {
                                       NotifyTaskExecutor taskExecutor,
                                       TraceContext traceContext,
                                       Aggregator aggregator,
+                                      EscalationPolicy escalation,
                                       Environment environment) {
         List<EventFilter> filters = buildFilters(properties, dedupeStore, rateLimiter);
         NotifyPipeline pipeline = NotifyPipeline.builder()
@@ -326,10 +328,12 @@ public class NotifyxAutoConfiguration {
                         properties.getChannels().getCircuitBreaker().getMaxOpenDuration()))
                 .traceContext(traceContext)
                 .aggregator(aggregator)
+                .escalation(escalation)
                 .build();
         aggregator.sink(pipeline::handle);
-        log.info("notifyx pipeline assembled: filters={}, channels={}", filters.size(),
-                channels.orderedStream().map(NotifyChannel::name).toList());
+        log.info("notifyx pipeline assembled: filters={}, channels={}, escalationRules={}",
+                filters.size(), channels.orderedStream().map(NotifyChannel::name).toList(),
+                escalation.ruleCount());
         return new DefaultNotifyKit(pipeline, taskExecutor, traceContext);
     }
 
@@ -345,6 +349,30 @@ public class NotifyxAutoConfiguration {
         NotifyxProperties.Aggregate config = properties.getAggregate();
         return new Aggregator(new Aggregator.Config(config.isEnabled(), config.getWindow(),
                 config.getMaxEntries()));
+    }
+
+    /**
+     * 升级策略（设计书 9.6）。默认关闭；T0 内存计数，多实例各自计数。
+     *
+     * @param properties 配置
+     * @return 策略
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public EscalationPolicy notifyxEscalationPolicy(NotifyxProperties properties) {
+        NotifyxProperties.Escalation config = properties.getEscalation();
+        if (!config.isEnabled() || config.getRules().isEmpty()) {
+            return EscalationPolicy.disabled();
+        }
+        List<EscalationPolicy.Rule> rules = new ArrayList<>();
+        for (NotifyxProperties.Escalation.Rule rule : config.getRules()) {
+            if (rule.getScene() == null || rule.getScene().isBlank()) {
+                continue;
+            }
+            rules.add(new EscalationPolicy.Rule(rule.getScene(), rule.getConsecutive(), rule.getWithin(),
+                    rule.getUpgradeTo(), rule.isResetOnSuccess()));
+        }
+        return new EscalationPolicy(rules, config.getResetScenes());
     }
 
     /**

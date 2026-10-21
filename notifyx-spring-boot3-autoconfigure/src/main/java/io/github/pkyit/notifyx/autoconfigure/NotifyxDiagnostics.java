@@ -176,6 +176,12 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         } else {
             builder.append("│   · 聚合未启用：重复事件只去重不汇总\n");
         }
+        if (properties.getEscalation().isEnabled()) {
+            builder.append("│   · 升级：").append(properties.getEscalation().getRules().size())
+                    .append(" 条规则（T0 实例内计数，多实例各自计数）\n");
+        } else {
+            builder.append("│   · 升级未启用：高频故障不会自动切到更高触达渠道\n");
+        }
     }
 
     private void appendActuatorHint(StringBuilder builder) {
