@@ -41,17 +41,20 @@
 **用途规划**：P1 之后做「多实例重复发送」验证（§11.5 选型表）、优雅关闭滚动发布验证、
 Admin/Consumer 部署验证。SDK 阶段不依赖 k8s。
 
-## 4. 构建基线（iter-12 实测）
+## 4. 构建基线（iter-13 实测）
 
 ```text
-mvn -B clean verify   → BUILD SUCCESS，12 模块，151 tests，0 failures
+mvn -B clean verify   → BUILD SUCCESS，12 模块，160 tests，0 failures
                          Spotless 0 violation / Checkstyle 0 violation
-                         JaCoCo：core 约 72%（门禁 65%）、spring 61.8%（门禁 60%）、
-                                 autoconfigure 41.7%（门禁 40%）、logback 85.2%（门禁 80%）、
+                         JaCoCo：core 约 72%（门禁 65%）、spring 92.2%（门禁 90%）、
+                                 autoconfigure 62.1%（门禁 60%）、logback 85.2%（门禁 80%）、
                                  channel-webhook 84.7%（门禁 80%）、channel-email 79%（门禁 75%）
 mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/javadoc
 构建耗时（增量）约 40 秒；首次含插件下载约 2 分钟
 ```
+
+**注意**：用 `-pl <module>` 单独构建前先 `mvn install`，否则本地仓库里的旧核心 jar
+会让新增的 core 类（如 `Aggregator`）找不到；或直接加 `-am`。
 
 **注意**：core 的单测需要真实 MDC 实现，已加 `logback-classic`（test scope）+
 `notifyx-core/src/test/resources/logback-test.xml` 收敛日志。
