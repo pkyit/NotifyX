@@ -1,15 +1,15 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-09 完成：升级策略）
+> 更新时间：2026-10-22（iter-10 完成：本地文件失败落盘）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 12 个模块，131 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 12 个模块，139 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
-优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级都已就绪。
-**P0 代码工作全部完成**（实际 deploy 需外部凭据）；P1 只剩失败落盘补偿等测试/存储项。
+优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级、失败落盘都已就绪。
+**P0 代码工作全部完成**（实际 deploy 需外部凭据）；P1 剩自动补偿（需 NotifyEnvelope）与测试债。
 
 ## 2. 已实现（按设计书章节）
 
@@ -47,7 +47,9 @@
 - [x] actuator `HealthIndicator`（§15.2）+ 启动诊断表（§14.4）—— iter-05（含 E2E）
 - [x] 聚合（§9.5，T0 实例内）—— iter-08（默认关闭；跨实例 T1/T2 待 P2 存储/MQ）
 - [x] 升级（§9.6）—— iter-09（连续 N 次/窗口/upgrade-to/恢复场景/成功清零，默认关闭）
-- [ ] 失败落盘补偿（文件 / JDBC 实现）
+- [x] 失败落盘（local-file，§9.9）—— iter-10（JSON/乐观锁/磁盘上限/重启可读；默认内存）
+- [ ] 失败自动补偿 —— ISSUE-015（需先做 `NotifyEnvelope` 序列化）
+- [ ] JDBC store —— P2（信创库适配）
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
 
 ### 明确不在本次交付范围（23 周路线图后续阶段）
@@ -61,7 +63,7 @@ sms4j 适配。
 | --- | --- | --- |
 | D-001 | core 用自定义 `NotifyxOrdered`，不用 Spring `Ordered` | 守住 ADR-003「core 零 Spring」，ArchUnit 强制 |
 | D-002 | 场景解析在进入 Filter 链前完成，`SceneRoutingFilter` 只裁决「场景是否启用」 | `FilterContext` 需要携带场景配置（模板/渠道/接收人） |
-| D-003 | 失败落盘当前只有有界内存 `InMemoryFailureStore` | local-file / JDBC 属 P1 后续，先保证 SPI 与调用点正确 |
+| D-003 | 失败落盘 P0 只有有界内存 `InMemoryFailureStore`（local-file 已由 D-017 落地，JDBC 待 P2） | 先保证 SPI 与调用点正确 |
 | D-004 | 渠道自动配置放各自渠道模块，不放 autoconfigure | 避免 autoconfigure 依赖渠道 SDK（第 5 章依赖纪律） |
 | D-005 | 新增 `notifyx-logback` 模块（设计书模块树未列） | P0 明确要求 Logback Appender，但放进 autoconfigure 会污染依赖方向 |
 | D-007 | Appender 的 `extractBizId` 用子元素而非属性 | logback 1.5 的 model 解析器不把嵌套元素属性写入对象，属性写法静默失效 |
@@ -74,11 +76,12 @@ sms4j 适配。
 | D-014 | 聚合先做 T0 实例内且默认关闭 | 没有 Redis/MQ 时跨实例聚合是错误承诺；行为变化类能力默认关 |
 | D-015 | 升级只改渠道、不改 Level | 避免升级动作悄悄绕过免打扰/限流（CRITICAL 旁路矩阵） |
 | D-016 | 升级计数包含被去重的事件 | 「未恢复」看故障持续，不看成功通知条数；否则长静默期下永远不升级 |
+| D-017 | local-file 落盘用手写扁平 JSON + 容量上限，暂不做自动重投 | core 不能引 Jackson；自动补偿需先定 NotifyEnvelope 契约 |
 
 ## 5. 下一步队列
 
-1. **P1 收尾**：失败落盘补偿（D-003，local-file 优先）。
-2. **测试债**：email 渠道契约测试（ISSUE-010）；ISSUE-013 覆盖率抬升（core 约 70% → 90%、spring 21.6% → 60%+）。
+1. **补偿能力**：`NotifyEnvelope` 序列化 + `FailureCompensationRunner`（ISSUE-015）。
+2. **测试债**：email 渠道契约测试（ISSUE-010）；ISSUE-013 覆盖率抬升（core 约 72% → 90%、spring 21.6% → 60%+）。
 3. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支

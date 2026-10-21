@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
 
 import io.github.pkyit.notifyx.core.model.Level;
 
@@ -46,6 +47,7 @@ public class NotifyxProperties {
     private final Diagnostics diagnostics = new Diagnostics();
     private final Aggregate aggregate = new Aggregate();
     private final Escalation escalation = new Escalation();
+    private final Fallback fallback = new Fallback();
     private final Events events = new Events();
     private final Actuator actuator = new Actuator();
 
@@ -151,6 +153,10 @@ public class NotifyxProperties {
 
     public Escalation getEscalation() {
         return escalation;
+    }
+
+    public Fallback getFallback() {
+        return fallback;
     }
 
     public Events getEvents() {
@@ -1134,6 +1140,48 @@ public class NotifyxProperties {
             public void setResetOnSuccess(boolean resetOnSuccess) {
                 this.resetOnSuccess = resetOnSuccess;
             }
+        }
+    }
+
+    /** 失败落盘配置（设计书 9.9）。 */
+    public static class Fallback {
+        /** 存储类型：memory | file。 */
+        private String store = "memory";
+        /** 文件存储目录；为空时使用 ~/.notifyx/pending。 */
+        private String dir;
+        private int maxFiles = 10_000;
+        private DataSize maxBytes = DataSize.ofMegabytes(100);
+
+        public String getStore() {
+            return store;
+        }
+
+        public void setStore(String store) {
+            this.store = store;
+        }
+
+        public String getDir() {
+            return dir;
+        }
+
+        public void setDir(String dir) {
+            this.dir = dir;
+        }
+
+        public int getMaxFiles() {
+            return maxFiles;
+        }
+
+        public void setMaxFiles(int maxFiles) {
+            this.maxFiles = maxFiles;
+        }
+
+        public DataSize getMaxBytes() {
+            return maxBytes;
+        }
+
+        public void setMaxBytes(DataSize maxBytes) {
+            this.maxBytes = maxBytes;
         }
     }
 }

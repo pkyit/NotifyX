@@ -137,3 +137,14 @@
   改用 `com.example.legacy.OrderService` 后立即恢复。
 - **影响**：罕见但难排查；示例工程已规避。
 - **计划**：P1 增加 `notifyx.logback.exclude-logger-prefixes`（或 Appender 属性），并校验不能移除默认前缀。
+
+## ISSUE-015 失败记录自动补偿未实现（需要 NotifyEnvelope 序列化）
+- **状态**：OPEN（P2/P3）
+- **现象**：iter-10 已把失败记录落盘并可读回/改状态，但「自动补偿任务」尚不可用：
+  `persistFailure` 写入的 `envelopeJson` 目前只是 `eventId`，无法据此重建完整事件重投。
+- **证据**：`NotifyPipeline.persistFailure` 构造 `FailedRecord` 时 envelope 参数为 `event.eventId()`。
+- **影响**：失败落盘目前是「留痕 + 人工可查」，不是「自动恢复」；关闭时未排空事件仍只 warn。
+- **计划**：先定义 `NotifyEnvelope`（§6.5）及其序列化/反序列化（core 零依赖或 optional JSON），
+  再实现 `FailureCompensationRunner`：CAS 抢占 → 重投 → SENT/DEAD + 退避。
+  与 MQ consumer、JDBC store 一起设计，避免两套报文契约。
+- **关联**：D-003（部分落地）、D-017。

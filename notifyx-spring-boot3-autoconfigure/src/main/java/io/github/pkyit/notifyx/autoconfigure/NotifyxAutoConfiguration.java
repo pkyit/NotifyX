@@ -1,6 +1,7 @@
 package io.github.pkyit.notifyx.autoconfigure;
 
 import java.net.InetAddress;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -53,6 +54,7 @@ import io.github.pkyit.notifyx.core.spi.TemplateEngine;
 import io.github.pkyit.notifyx.core.spi.TraceContext;
 import io.github.pkyit.notifyx.core.support.DefaultMasker;
 import io.github.pkyit.notifyx.core.support.InMemoryFailureStore;
+import io.github.pkyit.notifyx.core.support.LocalFileFailureStore;
 import io.github.pkyit.notifyx.core.support.LoggingAuditRecorder;
 import io.github.pkyit.notifyx.core.support.MdcTraceContext;
 import io.github.pkyit.notifyx.core.support.MemoryDedupeStore;
@@ -137,13 +139,21 @@ public class NotifyxAutoConfiguration {
     }
 
     /**
-     * 失败存储，默认有界内存实现。
+     * 失败存储：默认有界内存；{@code notifyx.fallback.store=file} 时落盘（设计书 9.9）。
      *
+     * @param properties 配置
      * @return 失败存储
      */
     @Bean
     @ConditionalOnMissingBean
-    public FailureStore notifyxFailureStore() {
+    public FailureStore notifyxFailureStore(NotifyxProperties properties) {
+        NotifyxProperties.Fallback fallback = properties.getFallback();
+        if ("file".equalsIgnoreCase(fallback.getStore())) {
+            Path dir = fallback.getDir() == null || fallback.getDir().isBlank()
+                    ? Path.of(System.getProperty("user.home"), ".notifyx", "pending")
+                    : Path.of(fallback.getDir());
+            return new LocalFileFailureStore(dir, fallback.getMaxFiles(), fallback.getMaxBytes().toBytes());
+        }
         return new InMemoryFailureStore();
     }
 
