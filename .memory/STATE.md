@@ -1,6 +1,6 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-16 完成：失败自动补偿）
+> 更新时间：2026-10-22（iter-17 交付审计：P0/P1 SDK 范围收口）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
 > 12 个模块，186 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
@@ -8,8 +8,8 @@
 ## 1. 一句话现状
 
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
-优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级、失败落盘都已就绪。
-**P0 代码工作全部完成**（实际 deploy 需外部凭据）；P1 剩自动补偿（需 NotifyEnvelope）与测试债。
+优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级、失败落盘与自动补偿
+**全部完成**。P0/P1 SDK 范围已收口（见 iter-17 审计）；P2 起（Redis/JDBC/MQ/Admin/IM）不在本次范围。
 
 ## 2. 已实现（按设计书章节）
 
@@ -83,12 +83,14 @@ sms4j 适配。
 | D-016 | 升级计数包含被去重的事件 | 「未恢复」看故障持续，不看成功通知条数；否则长静默期下永远不升级 |
 | D-017 | local-file 落盘用手写扁平 JSON + 容量上限，暂不做自动重投 | core 不能引 Jackson；自动补偿需先定 NotifyEnvelope 契约 |
 
-## 5. 下一步队列
+## 5. 下一步队列（P2 起，不属于本次 P0/P1 交付）
 
 1. **测试债**：core 79.8% → 90%（defer/failureStore/onSuccess 回调、NotifyContext builder）；T1–T24 剩余用例。
-2. **P2 起点的准备**：Redis store / JDBC store / MQ 总线（需要交付环境与时间）。
-3. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
+2. **P2**：Redis store（跨实例去重/限流/聚合）、JDBC store（审计+补偿，信创库 DDL）。
+3. **P3**：MQ 三总线 + consumer（producer-only/consumer 模式、幂等键）。
+4. **P4**：Admin 控制台（配置 pull + 记录 + 大盘）。
+5. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-16 合并后）。工作分支命名见 README。
+`master`（iter-17 合并后）。工作分支命名见 README。
