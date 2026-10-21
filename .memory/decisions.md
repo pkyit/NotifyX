@@ -151,3 +151,21 @@
   先让门禁 100% 绿并可持续，再逐步抬高阈值，比设一个永远红的门禁更有效。
 - **影响**：本次 92 个文件出现 2 行左右的机械变更（EOF/import），已单独成一次提交。
 - **复审条件**：core 覆盖率到 80% 后把门禁抬到 0.80；到 90% 后抬到 0.90 并移除 ratchet 说明。
+
+## D-011 模板配置用「不做占位符替换」的 Binder 读取
+
+- **日期**：2026-10-22（iter-04）
+- **状态**：生效
+- **背景**：模板语法是 `${userName}`。`@ConfigurationProperties` 的默认绑定会把 `${...}`
+  当作 Spring 占位符解析，而 `SystemEnvironmentPropertySource` 会把 `userName` 关联到
+  环境变量 `USERNAME`。实测 L3 发布 `userName=bob`，通知内容却渲染成 `admin`（Windows 用户名）。
+  这是「看起来正常、内容悄悄错」的高危问题，且只在变量名与环境变量撞车时出现，极难排查。
+- **决策**：`NotifyxAutoConfiguration` 单独用
+  `new Binder(ConfigurationPropertySources.get(environment), value -> value)`
+  重新绑定 `notifyx.templates`（identity PlaceholdersResolver），忽略已解析的 `NotifyxProperties` 值；
+  绑定失败则回退到常规值并记 warn。
+- **理由**：模板占位符与框架占位符必须有明确边界。让用户在 YAML 里写 `\${userName}` 转义
+  既难记又容易漏，不如框架层彻底隔离。
+- **影响**：模板配置**不支持** Spring 占位符（例如 `notifyx.templates.x.title=${spring.application.name}`
+  不会被替换）。这是刻意的：模板变量只由事件参数填充。已写进 README 与发布测试。
+- **复审条件**：若未来支持 FreeMarker/Thymeleaf 等外部模板（P2），在模板引擎层统一占位符语义。

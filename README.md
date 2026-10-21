@@ -123,6 +123,7 @@ public class OrderService {
 | --- | --- | --- |
 | L0 | Logback Appender（`notifyx-logback`）：日志即告警，业务代码一行不改 | 0 |
 | L2 | `@AlarmProtect(scene = "PAY_CALLBACK_FAIL")` / `@NotifyOn(scene = "...", when = "#r.code != 0")` | 一个注解 |
+| L3 | `@NotifyxScene` 事件或 `notifyx.events.mappings`：业务只发 Spring 事件 | 一次 publish |
 | L4 | `notifyKit.alarm(scene, ex, ctx...)` / `notifyKit.send(scene, params)` | 一行调用 |
 
 ### L0 · 日志即告警（存量项目首选）
@@ -161,7 +162,40 @@ Spring 环境自动把 `NotifyKit` 注入 appender；非 Spring 环境手动 `ap
 > 或扁平写法 `<extractBizIdRegex>orderId=(\w+)</extractBizIdRegex>`。
 
 
+### L2 · 注解 + AOP（主力用法）
+
+`@AlarmProtect` / `@NotifyOn` 一行注解挂在方法上；SpEL 默认禁用方法调用，防止表达式注入。
+
 注解语义：`@AlarmProtect` 只在抛异常时触发，**异常原样抛出**；`@NotifyOn` 在 SpEL 条件为真或抛异常时触发，返回值原样返回。切面内部任何异常都被吞掉并记 warn，绝不影响业务。
+
+### L3 · Spring Event（彻底解耦）
+
+业务代码只发 Spring 事件，连 `NotifyKit` 都不用注入。让桥接层知道场景有两种方式：
+
+**a) 注解事件类（可同时提供结构化参数）**
+
+```java
+@NotifyxScene(value = "ACCOUNT_CREATED", level = Level.INFO, receivers = {"ops@example.com"})
+public record AccountCreatedEvent(String phone) implements NotifyxEventPayload {
+    public Map<String, ?> params() {
+        return Map.of("phone", phone);
+    }
+}
+
+applicationEventPublisher.publishEvent(new AccountCreatedEvent(phone));
+```
+
+**b) 事件类零依赖 NotifyX，用配置映射**
+
+```yaml
+notifyx:
+  events:
+    mappings:
+      com.example.event.AccountCreatedEvent: ACCOUNT_CREATED
+```
+
+桥接层把「原始事件类名 + `toString()`」放进 `params.__source` 便于审计追溯；
+翻译失败只记 warn，**绝不把异常抛回事件发布方**。`notifyx.events.enabled=false` 可整体关闭。
 
 ## 配置（节选）
 
@@ -192,6 +226,10 @@ notifyx:
     critical-bypass: true
   global-mute:
     enabled: false            # 一键止血，运行时可由 Admin 切换
+  events:
+    enabled: true
+    mappings:                 # L3：事件类 → 场景码
+      com.example.event.AccountCreatedEvent: ACCOUNT_CREATED
   channels:
     email:
       enabled: true
@@ -201,6 +239,9 @@ notifyx:
 ```
 
 完整字段见各 `*Properties` 类（IDE 里敲 `notifyx.` 有补全）。
+
+> 模板里的 `${...}` 是 **NotifyX 模板语法**，不是 Spring 占位符：模板配置用不做替换的 Binder 绑定，
+> 所以 `${userName}` 不会被环境变量 `USERNAME` 篡改（这是实测踩到的坑，见 `.memory` D-011）。
 
 ## 扩展：写一个渠道（目标 < 80 行）
 
@@ -251,6 +292,8 @@ public EventFilter debugOnlyFilter() {
 - 责任链：全局静默、场景路由、免打扰、去重（含失败释放）、场景限流、全局限流
 - 执行层：优先级队列（drop-lowest）、指数退避 + 抖动、按渠道熔断、审计、失败落盘接口
 - 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
+- L3：Spring Event 桥接（`@NotifyxScene` 注解 / 配置映射，`params.__source` 可追溯）
+- Trace：MDC 里的 `traceId`/`spanId` 自动进入模板、渠道上下文与审计（Micrometer / SkyWalking 均可）
 - 渠道：log（默认开）、email、webhook（HMAC-SHA256 + 时间戳防重放 + 主机白名单）
 - L0：`notifyx-logback` Appender（异步有界、噪声过滤、业务主键提取、双重防自递归）
 - 自动装配：全量 `@ConditionalOnMissingBean`、零依赖启动测试（T13）、Micrometer 指标

@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: notifyx-sample
 
@@ -37,6 +37,14 @@ notifyx:
       channels: [log]
       template: log-error
       silent-window: 1m
+    # L3 Spring Event：由 @NotifyxScene 注解翻译
+    ACCOUNT_CREATED:
+      level: INFO
+      channels: [log]
+      template: account-created
+      silent-window: 1m
+  events:
+    enabled: true
   templates:
     engine: simple
     templates:
@@ -53,6 +61,14 @@ notifyx:
           ${formattedMessage}
           日志来源：${logger}
           实例：${instanceId}
+      account-created:
+        title: "【账号开通】${userName}"
+        content: |
+          账号 ${userName} 已开通
+          手机：${phone}
+          实例：${instanceId}
+          链路：${traceId}
+          来源：${__source}
   dedupe:
     enabled: true
     default-window: 1m

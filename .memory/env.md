@@ -41,14 +41,18 @@
 **用途规划**：P1 之后做「多实例重复发送」验证（§11.5 选型表）、优雅关闭滚动发布验证、
 Admin/Consumer 部署验证。SDK 阶段不依赖 k8s。
 
-## 4. 构建基线（iter-00 实测）
+## 4. 构建基线（iter-04 实测）
 
 ```text
-mvn -B clean verify   → BUILD SUCCESS，11 模块，73 tests，0 failures
+mvn -B clean verify   → BUILD SUCCESS，11 模块，92 tests，0 failures
                          Spotless 0 violation / Checkstyle 0 violation
-                         JaCoCo：core 67.7%（门禁 65%）、logback 85.2%（门禁 80%）、autoconfigure 41.7%（门禁 40%）
+                         JaCoCo：core 67.7%（门禁 65%）、spring 21.6%（门禁 20%）、
+                                 autoconfigure 41.7%（门禁 40%）、logback 85.2%（门禁 80%）
 构建耗时（增量）约 40 秒；首次含插件下载约 2 分钟
 ```
+
+**注意**：core 的单测需要真实 MDC 实现，已加 `logback-classic`（test scope）+
+`notifyx-core/src/test/resources/logback-test.xml` 收敛日志。
 
 ## 5. CI 矩阵（§17.4）
 

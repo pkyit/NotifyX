@@ -18,6 +18,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 
@@ -45,13 +48,16 @@ import io.github.pkyit.notifyx.core.spi.Masker;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.RateLimiter;
 import io.github.pkyit.notifyx.core.spi.TemplateEngine;
+import io.github.pkyit.notifyx.core.spi.TraceContext;
 import io.github.pkyit.notifyx.core.support.DefaultMasker;
 import io.github.pkyit.notifyx.core.support.InMemoryFailureStore;
 import io.github.pkyit.notifyx.core.support.LoggingAuditRecorder;
+import io.github.pkyit.notifyx.core.support.MdcTraceContext;
 import io.github.pkyit.notifyx.core.support.MemoryDedupeStore;
 import io.github.pkyit.notifyx.core.support.MemoryRateLimiter;
 import io.github.pkyit.notifyx.core.support.SimpleTemplateEngine;
 import io.github.pkyit.notifyx.spring.aop.NotifyxAspect;
+import io.github.pkyit.notifyx.spring.event.NotifyxEventBridge;
 import io.github.pkyit.notifyx.spring.executor.PriorityNotifyExecutor;
 import io.github.pkyit.notifyx.spring.spel.SpelEvaluator;
 
@@ -163,6 +169,17 @@ public class NotifyxAutoConfiguration {
     }
 
     /**
+     * Trace 读取口：默认读 MDC（Micrometer Tracing / SkyWalking 都会写入）。
+     *
+     * @return trace 上下文
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public TraceContext notifyxTraceContext() {
+        return new MdcTraceContext();
+    }
+
+    /**
      * 投递执行器：异步走优先级队列，关闭或禁用时同步执行。
      *
      * @param properties 配置
@@ -220,12 +237,35 @@ public class NotifyxAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(name = "notifyxTemplates")
-    public Map<String, MessageTemplate> notifyxTemplates(NotifyxProperties properties) {
+    public Map<String, MessageTemplate> notifyxTemplates(NotifyxProperties properties, Environment environment) {
         Map<String, MessageTemplate> templates = new LinkedHashMap<>();
         templates.put("default", new MessageTemplate("default", "[${level}] ${scene}", "${content}"));
-        properties.getTemplates().getTemplates().forEach((code, template) ->
+        rawTemplateConfig(properties, environment).getTemplates().forEach((code, template) ->
                 templates.put(code, new MessageTemplate(code, template.getTitle(), template.getContent())));
         return templates;
+    }
+
+    /**
+     * 用不做占位符替换的 Binder 读取模板配置。
+     *
+     * <p><b>为什么必须这样</b>：模板语法是 <code>${userName}</code>，而 Spring 的
+     * {@code @ConfigurationProperties} 绑定默认会把 <code>${...}</code> 当环境变量解析
+     * （Windows 的 {@code USERNAME=admin} 会把模板里的 userName 悄悄替换成 admin）。
+     * 模板占位符与 Spring 占位符必须隔离，否则参数名碰巧等于环境变量就会被静默篡改。</p>
+     *
+     * @param properties 已绑定的配置（兜底）
+     * @param environment 环境
+     * @return 原始模板配置
+     */
+    private static NotifyxProperties.Templates rawTemplateConfig(NotifyxProperties properties, Environment environment) {
+        try {
+            Binder binder = new Binder(ConfigurationPropertySources.get(environment), value -> value);
+            return binder.bind("notifyx.templates", Bindable.of(NotifyxProperties.Templates.class))
+                    .orElse(properties.getTemplates());
+        } catch (RuntimeException ex) {
+            log.warn("notifyx: raw template binding failed, fallback to bound values: {}", ex.toString());
+            return properties.getTemplates();
+        }
     }
 
     /**
@@ -242,6 +282,7 @@ public class NotifyxAutoConfiguration {
      * @param masker 脱敏器
      * @param metrics 指标
      * @param taskExecutor 执行器
+     * @param traceContext trace 读取口
      * @param environment 环境
      * @return 门面
      */
@@ -258,6 +299,7 @@ public class NotifyxAutoConfiguration {
                                       Masker masker,
                                       NotifyMetrics metrics,
                                       NotifyTaskExecutor taskExecutor,
+                                      TraceContext traceContext,
                                       Environment environment) {
         List<EventFilter> filters = buildFilters(properties, dedupeStore, rateLimiter);
         NotifyPipeline pipeline = NotifyPipeline.builder()
@@ -280,10 +322,25 @@ public class NotifyxAutoConfiguration {
                         properties.getChannels().getCircuitBreaker().getFailureThreshold(),
                         properties.getChannels().getCircuitBreaker().getOpenDuration(),
                         properties.getChannels().getCircuitBreaker().getMaxOpenDuration()))
+                .traceContext(traceContext)
                 .build();
         log.info("notifyx pipeline assembled: filters={}, channels={}", filters.size(),
                 channels.orderedStream().map(NotifyChannel::name).toList());
-        return new DefaultNotifyKit(pipeline, taskExecutor);
+        return new DefaultNotifyKit(pipeline, taskExecutor, traceContext);
+    }
+
+    /**
+     * L3 Spring Event 桥接：业务只发事件，桥接层翻译成 NotifyEvent（设计书 8.4）。
+     *
+     * @param notifyKit 门面
+     * @param properties 配置
+     * @return 桥接器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "notifyx.events", name = "enabled", matchIfMissing = true)
+    public NotifyxEventBridge notifyxEventBridge(NotifyKit notifyKit, NotifyxProperties properties) {
+        return new NotifyxEventBridge(notifyKit, properties.getEvents().getMappings());
     }
 
     /**

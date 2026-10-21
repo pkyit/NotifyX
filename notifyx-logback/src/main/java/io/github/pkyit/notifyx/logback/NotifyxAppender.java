@@ -242,7 +242,26 @@ public class NotifyxAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
                 event.getThrowableProxy(),
                 extractBizId(formatted),
                 markerName,
+                mdcValue(event, "traceId"),
+                mdcValue(event, "spanId"),
                 event.getTimeStamp());
+    }
+
+    /**
+     * 读取 MDC 值。个别环境（例如手工构造 LoggerContext）没有 MDCAdapter，
+     * logback 的 {@code getMDCPropertyMap()} 会抛 NPE——这里必须吞掉，否则整条日志被丢弃。
+     *
+     * @param event 日志事件
+     * @param key MDC key
+     * @return 值或 null
+     */
+    private static String mdcValue(ILoggingEvent event, String key) {
+        try {
+            Map<String, String> mdc = event.getMDCPropertyMap();
+            return mdc == null ? null : mdc.get(key);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private boolean markerMatches(ILoggingEvent event) {
@@ -342,6 +361,12 @@ public class NotifyxAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
                 .tag("source", "logback")
                 .tag("logLevel", record.levelName())
                 .tag("logger", record.loggerName() == null ? "" : record.loggerName());
+        if (record.traceId() != null) {
+            builder.tag("traceId", record.traceId());
+        }
+        if (record.spanId() != null) {
+            builder.tag("spanId", record.spanId());
+        }
         if (record.bizId() != null) {
             builder.bizId(record.bizId());
         }
@@ -662,6 +687,6 @@ public class NotifyxAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
      */
     private record LogRecord(String loggerName, String threadName, int level, String levelName,
                              String message, String formattedMessage, IThrowableProxy throwable,
-                             String bizId, String marker, long timestamp) {
+                             String bizId, String marker, String traceId, String spanId, long timestamp) {
     }
 }

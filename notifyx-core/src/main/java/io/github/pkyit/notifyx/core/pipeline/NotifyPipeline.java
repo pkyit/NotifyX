@@ -32,6 +32,7 @@ import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.NotifyContext;
 import io.github.pkyit.notifyx.core.spi.RecordStatus;
 import io.github.pkyit.notifyx.core.spi.TemplateEngine;
+import io.github.pkyit.notifyx.core.spi.TraceContext;
 import io.github.pkyit.notifyx.core.support.Fingerprints;
 import io.github.pkyit.notifyx.core.support.LoggingAuditRecorder;
 
@@ -67,6 +68,7 @@ public final class NotifyPipeline {
     private final DeferredHandler deferredHandler;
     private final Map<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final CircuitConfig circuitConfig;
+    private final TraceContext traceContext;
 
     /**
      * {@link DedupeStore} 持有者，便于失败时释放。
@@ -93,6 +95,7 @@ public final class NotifyPipeline {
         this.maskBeforeAudit = builder.maskBeforeAudit;
         this.deferredHandler = builder.deferredHandler;
         this.circuitConfig = builder.circuitConfig;
+        this.traceContext = builder.traceContext == null ? TraceContext.none() : builder.traceContext;
     }
 
     /**
@@ -181,13 +184,18 @@ public final class NotifyPipeline {
 
     private boolean sendOne(NotifyChannel channel, NotifyEvent event, Map<String, Object> renderParams,
                             String receiver, String dedupeKey, SceneConfig scene) {
-        String renderedTitle = templateEngine.render(templateFor(scene).title(), renderParams, channel.preferredFormat());
-        String renderedContent = templateEngine.render(templateFor(scene).content(), renderParams, channel.preferredFormat());
+        String traceId = resolveTraceId(event);
+        String spanId = resolveSpanId(event);
+        Map<String, Object> tracedParams = withTrace(renderParams, traceId, spanId);
+        String renderedTitle = templateEngine.render(templateFor(scene).title(), tracedParams, channel.preferredFormat());
+        String renderedContent = templateEngine.render(templateFor(scene).content(), tracedParams, channel.preferredFormat());
         NotifyContext baseContext = NotifyContext.builder(event)
                 .renderedTitle(renderedTitle)
                 .renderedContent(renderedContent)
                 .renderFormat(channel.preferredFormat())
                 .receiver(receiver)
+                .traceId(traceId)
+                .spanId(spanId)
                 .instanceId(instanceId)
                 .idempotencyKey(dedupeKey)
                 .build();
@@ -288,7 +296,7 @@ public final class NotifyPipeline {
                     result == null ? "UNKNOWN" : result.status().name(),
                     result == null ? null : result.failureReason(),
                     result == null ? 0 : 1, cost.toMillis(), instanceId,
-                    event.tag("traceId"), System.currentTimeMillis(),
+                    resolveTraceId(event), System.currentTimeMillis(),
                     result != null && result.status() == SendResult.Status.SUCCESS
                             ? Long.valueOf(System.currentTimeMillis()) : null));
         } catch (RuntimeException ex) {
@@ -421,6 +429,40 @@ public final class NotifyPipeline {
     }
 
     /**
+     * 把 trace 信息补进渲染参数（只在渲染前做，不影响去重指纹）。
+     *
+     * @param params 原始渲染参数
+     * @param traceId traceId
+     * @param spanId spanId
+     * @return 新参数表
+     */
+    private static Map<String, Object> withTrace(Map<String, Object> params, String traceId, String spanId) {
+        if (traceId == null && spanId == null) {
+            return params;
+        }
+        Map<String, Object> enriched = new LinkedHashMap<>(params);
+        Object existingTrace = enriched.get("traceId");
+        if (traceId != null && (existingTrace == null || String.valueOf(existingTrace).isBlank())) {
+            enriched.put("traceId", traceId);
+        }
+        Object existingSpan = enriched.get("spanId");
+        if (spanId != null && (existingSpan == null || String.valueOf(existingSpan).isBlank())) {
+            enriched.put("spanId", spanId);
+        }
+        return enriched;
+    }
+
+    private String resolveTraceId(NotifyEvent event) {
+        String tag = event.tag("traceId");
+        return tag != null && !tag.isBlank() ? tag : traceContext.traceId();
+    }
+
+    private String resolveSpanId(NotifyEvent event) {
+        String tag = event.tag("spanId");
+        return tag != null && !tag.isBlank() ? tag : traceContext.spanId();
+    }
+
+    /**
      * 熔断配置。
      *
      * @param failureThreshold 连续失败阈值
@@ -464,6 +506,7 @@ public final class NotifyPipeline {
         private boolean maskBeforeAudit = true;
         private DeferredHandler deferredHandler;
         private CircuitConfig circuitConfig = CircuitConfig.defaults();
+        private TraceContext traceContext = TraceContext.none();
 
         private Builder() {
         }
@@ -540,6 +583,17 @@ public final class NotifyPipeline {
 
         public Builder circuitConfig(CircuitConfig circuitConfig) {
             this.circuitConfig = circuitConfig;
+            return this;
+        }
+
+        /**
+         * trace 读取口，默认不采集；Spring 环境注入 MDC 实现。
+         *
+         * @param traceContext trace 读取口
+         * @return 构建器
+         */
+        public Builder traceContext(TraceContext traceContext) {
+            this.traceContext = traceContext;
             return this;
         }
 

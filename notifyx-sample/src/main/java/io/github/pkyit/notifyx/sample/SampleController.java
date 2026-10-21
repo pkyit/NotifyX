@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Marker;
 import org.slf4j.MarkerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 
 /**
- * 示例接口：一行门面调用、异常告警、通知风暴与 L0 日志接入。
+ * 示例接口：一行门面调用、异常告警、通知风暴、L0 日志接入与 L3 Spring Event。
  *
  * <p>@implNote 线程安全。</p>
  *
@@ -32,9 +33,11 @@ public class SampleController {
     private static final Marker ALARM = MarkerFactory.getMarker("ALARM");
 
     private final NotifyKit notifyKit;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public SampleController(NotifyKit notifyKit) {
+    public SampleController(NotifyKit notifyKit, ApplicationEventPublisher eventPublisher) {
         this.notifyKit = notifyKit;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -78,6 +81,20 @@ public class SampleController {
     public Map<String, Object> logError(@RequestParam(defaultValue = "SO20261022003") String orderNo) {
         legacyLog.error(ALARM, "orderId={} 支付回调超时（L0 日志接入演示，业务代码未调用 NotifyX）", orderNo);
         return Map.of("logged", true, "scene", "LOG_ERROR", "orderNo", orderNo);
+    }
+
+    /**
+     * L3 演示：只发一个 Spring 事件，业务不注入 NotifyKit（设计书 8.4）。
+     *
+     * @param phone 手机号
+     * @param userName 用户名
+     * @return 结果
+     */
+    @GetMapping("/demo/event")
+    public Map<String, Object> publishEvent(@RequestParam(defaultValue = "13800000000") String phone,
+                                            @RequestParam(defaultValue = "张三") String userName) {
+        eventPublisher.publishEvent(new AccountCreatedEvent(phone, userName));
+        return Map.of("published", true, "scene", "ACCOUNT_CREATED", "phone", phone, "userName", userName);
     }
 
     /**

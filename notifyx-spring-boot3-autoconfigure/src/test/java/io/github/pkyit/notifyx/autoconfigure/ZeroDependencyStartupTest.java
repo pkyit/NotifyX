@@ -2,6 +2,8 @@ package io.github.pkyit.notifyx.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -10,10 +12,13 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import io.github.pkyit.notifyx.channel.log.LogChannelAutoConfiguration;
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
+import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
 import io.github.pkyit.notifyx.core.spi.DedupeStore;
 import io.github.pkyit.notifyx.core.spi.FailureStore;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
+import io.github.pkyit.notifyx.core.spi.TraceContext;
+import io.github.pkyit.notifyx.spring.event.NotifyxEventBridge;
 
 /**
  * T13：零依赖启动测试——classpath 只有 core/spring/autoconfigure + log 渠道时，
@@ -35,8 +40,30 @@ class ZeroDependencyStartupTest {
             assertThat(context).hasSingleBean(FailureStore.class);
             assertThat(context).hasSingleBean(NotifyTaskExecutor.class);
             assertThat(context).hasSingleBean(NotifyMetrics.class);
+            assertThat(context).hasSingleBean(TraceContext.class);
+            assertThat(context).hasSingleBean(NotifyxEventBridge.class);
             assertThat(context.getBeansOfType(NotifyChannel.class)).containsKey("notifyxLogChannel");
         });
+    }
+
+    @Test
+    @DisplayName("notifyx.events.enabled=false 时不装配 L3 桥接器")
+    void shouldBackOffEventBridgeWhenDisabled() {
+        runner.withPropertyValues("notifyx.events.enabled=false")
+                .run(context -> assertThat(context).doesNotHaveBean(NotifyxEventBridge.class));
+    }
+
+    @Test
+    @DisplayName("模板占位符不被 Spring 环境变量替换（${userName} 保持原样）")
+    void shouldKeepTemplatePlaceholdersRaw() {
+        runner.withSystemProperties("userName=admin")
+                .withPropertyValues(
+                        "notifyx.templates.templates.t1.title=hi-${userName}",
+                        "notifyx.templates.templates.t1.content=c-${userName}")
+                .run(context -> {
+                    Map<String, MessageTemplate> templates = context.getBean("notifyxTemplates", Map.class);
+                    assertThat(templates.get("t1").title()).isEqualTo("hi-${userName}");
+                });
     }
 
     @Test

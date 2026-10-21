@@ -48,13 +48,26 @@
   模板引擎边界；每轮提升后同步抬 `jacoco.minimum`。
 
 ## ISSUE-004 Spring Event 桥接（L3）与 MDC 未实现（§8.4 / §15.3）
-- **状态**：OPEN（计划 iter-04）
+- **状态**：CLOSED（iter-04）
 - **现象**：`notifyx-spring` 只有 `NotifyxAspect` / `SpelEvaluator` / 两个注解 / 优先级执行器，
   没有 `@EventListener` 桥接，也没有 MDC 透传（traceId / scene）。
 - **证据**：`notifyx-spring/src/main/java/.../spring/` 下 5 个类，无 Event 相关类。
 - **影响**：§21.2 第 6 步验收缺一半；L3「彻底解耦」用法不可用。
-- **计划**：iter-04 增加 `NotifyxEventBridge`（实现 `ApplicationListener<NotifyxEvent>`）+
-  MDC 注入（`eventId`/`scene`/`traceId`），并补测试。
+- **关闭方式**：新增 `NotifyxEventBridge` + `@NotifyxScene` + `NotifyxEventPayload`；
+  core 新增 `TraceContext`/`MdcTraceContext`，门面在调用线程抓 trace 写事件标签，
+  管线渲染/审计/`NotifyContext` 全链路带上 traceId。测试：spring 6 个 + core 4 个。
+  E2E：`/demo/event` 发布事件 → 通知正常投递。
+
+## ISSUE-014 模板 `${...}` 被 Spring 占位符解析篡改（iter-04 发现并修复）
+- **状态**：CLOSED（iter-04）
+- **现象**：L3 示例发布 `userName=bob`，通知标题却是 `【账号开通】admin`（Windows 的 `USERNAME=admin`）；
+  `params.__source` 里仍是 `userName=bob`，说明是渲染前参数被替换。
+- **证据**：E2E 日志对比；`@ConfigurationProperties` 绑定默认用 `PropertySourcesPlaceholdersResolver`，
+  `SystemEnvironmentPropertySource` 会把 `userName` 关联到环境变量 `USERNAME`。
+- **影响**：任何模板变量名碰巧等于环境变量（`userName`/`path`/`host`/`home`…）都会被静默改写，
+  属于「看起来正常、内容悄悄错」的高危问题。
+- **关闭方式**：模板配置改用 identity `PlaceholdersResolver` 的 `Binder` 重新绑定（D-011），
+  并在 `ZeroDependencyStartupTest` 用系统属性 `userName=admin` 固定该行为。
 
 ## ISSUE-005 优雅关闭只有执行器 destroy，缺少端到端验证（§9.10）
 - **状态**：OPEN（计划 iter-05）
