@@ -15,8 +15,8 @@
     <description>领域模型、SPI、指纹与限流算法；仅依赖 SLF4J</description>
 
     <properties>
-        <!-- core 是算法与模型的所在地，门禁高于其他模块；设计书目标 90%，当前基线 67.7% -->
-        <jacoco.minimum>0.65</jacoco.minimum>
+        <!-- core 是算法与模型的所在地，门禁高于其他模块；设计书目标 90%，当前基线 78% -->
+        <jacoco.minimum>0.76</jacoco.minimum>
     </properties>
 
     <dependencies>

@@ -52,4 +52,69 @@ class NotifyEventTest {
         assertThat(event.level()).isEqualTo(Level.WARN);
         assertThat(event.eventId()).startsWith("evt_");
     }
+
+    @Test
+    @DisplayName("params 超过 64KB 时拒绝构建，防止把大对象带进通知")
+    void shouldRejectOversizedParams() {
+        assertThatThrownBy(() -> NotifyEvent.builder("SCENE_A")
+                .param("big", "x".repeat(40_000))
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("params exceed");
+    }
+
+    @Test
+    @DisplayName("null 参数值归一为 __NULL__，Instant 归一为 epoch millis")
+    void shouldNormalizeValues() {
+        NotifyEvent event = NotifyEvent.builder("SCENE_A")
+                .param("none", null)
+                .param("at", java.time.Instant.ofEpochMilli(1729500000000L))
+                .build();
+
+        assertThat(event.params()).containsEntry("none", "__NULL__");
+        assertThat(event.params()).containsEntry("at", 1729500000000L);
+    }
+
+    @Test
+    @DisplayName("嵌套超过 3 层的参数退化为字符串，避免深拷贝开销")
+    void shouldFlattenDeepNesting() {
+        Map<String, Object> level3 = Map.of("d", "v");
+        Map<String, Object> level2 = Map.of("c", level3);
+        Map<String, Object> level1 = Map.of("b", level2);
+
+        NotifyEvent event = NotifyEvent.builder("SCENE_A").param("a", level1).build();
+
+        assertThat(String.valueOf(event.params().get("a"))).contains("d=v");
+    }
+
+    @Test
+    @DisplayName("tags 防御性拷贝且可按 key 读取")
+    void shouldCopyTags() {
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("traceId", "t-1");
+        NotifyEvent event = NotifyEvent.builder("SCENE_A").tags(tags).build();
+        tags.put("traceId", "changed");
+
+        assertThat(event.tag("traceId")).isEqualTo("t-1");
+        assertThat(event.tag("missing")).isNull();
+    }
+
+    @Test
+    @DisplayName("自定义 eventId / occurredAt / silentWindow / async 原样保留")
+    void shouldKeepExplicitValues() {
+        NotifyEvent event = NotifyEvent.builder("SCENE_A")
+                .eventId("evt_custom")
+                .occurredAt(123L)
+                .silentWindow(java.time.Duration.ofMinutes(5))
+                .async(false)
+                .title("标题")
+                .build();
+
+        assertThat(event.eventId()).isEqualTo("evt_custom");
+        assertThat(event.occurredAt()).isEqualTo(123L);
+        assertThat(event.silentWindow()).hasMinutes(5);
+        assertThat(event.async()).isFalse();
+        assertThat(event.title()).isEqualTo("标题");
+        assertThat(event.toString()).contains("SCENE_A").contains("evt_custom");
+    }
 }

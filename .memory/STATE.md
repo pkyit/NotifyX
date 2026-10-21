@@ -1,9 +1,9 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-13 完成：优先级队列语义 + Micrometer 指标测试）
+> 更新时间：2026-10-22（iter-14 完成：管线重试/熔断与事件边界测试）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 12 个模块，160 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 12 个模块，170 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -51,6 +51,7 @@
 - [x] 渠道契约测试（§18.3）—— iter-06 webhook 12 个 + iter-11 email 6 个（ISSUE-010 关闭）
 - [x] L2 切面测试（§8.3）—— iter-12（@AlarmProtect/@NotifyOn/SpEL 安全默认，spring 覆盖率 61.8%）
 - [x] 优先级队列语义 + Micrometer 指标测试 —— iter-13（spring 92.2%、autoconfigure 62.1%）
+- [x] 管线重试/熔断 + 事件边界测试 —— iter-14（core 覆盖率 78%，门禁 76%）
 - [ ] 失败自动补偿 —— ISSUE-015（需先做 `NotifyEnvelope` 序列化）
 - [ ] JDBC store —— P2（信创库适配）
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
@@ -84,9 +85,9 @@ sms4j 适配。
 ## 5. 下一步队列
 
 1. **补偿能力**：`NotifyEnvelope` 序列化 + `FailureCompensationRunner`（ISSUE-015）。
-2. **测试债**：core 约 72% → 90%（Pipeline 重试/熔断分支、NotifyEvent 边界）；T1–T24 剩余用例。
+2. **测试债**：core 78% → 90%（defer/failureStore/onSuccess 回调、NotifyContext builder）；T1–T24 剩余用例。
 3. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-13 合并后）。工作分支命名见 README。
+`master`（iter-14 合并后）。工作分支命名见 README。
