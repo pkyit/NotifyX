@@ -92,3 +92,12 @@
 - **现象**：`pwsh Get-Content` 读取 UTF-8 中文 pom 时显示 `鍏滃簳...`；`java -version` 输出也被当作错误流。
 - **证据**：`read` 工具读取同一文件正常。属于 PowerShell 5.1 默认 ANSI 解码问题。
 - **处理**：脚本里显式 `-Encoding UTF8`；写文件统一 UTF-8 无 BOM。
+
+## ISSUE-012 Appender 内部 logger 前缀硬编码，无法配置
+- **状态**：OPEN（P1 诊断表时评估，见 D-008）
+- **现象**：`NotifyxAppender` 过滤 `io.github.pkyit.notifyx` 与 `NOTIFYX_` 开头的 logger。
+  若业务方（或示例工程）把代码放在 `io.github.pkyit.notifyx.*` 下，这些日志会被一起静默丢弃。
+- **证据**：iter-01 E2E 中 `/demo/log-error` 无投递；sample 包名为 `io.github.pkyit.notifyx.sample`。
+  改用 `com.example.legacy.OrderService` 后立即恢复。
+- **影响**：罕见但难排查；示例工程已规避。
+- **计划**：P1 增加 `notifyx.logback.exclude-logger-prefixes`（或 Appender 属性），并校验不能移除默认前缀。

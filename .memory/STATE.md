@@ -1,14 +1,14 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-00 基线盘点）
+> 更新时间：2026-10-22（iter-01 完成：Logback Appender）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
-> 构建基线：`mvn -B clean verify` 通过，10 个模块，26 个测试。
+> 构建基线：`mvn -B clean verify` 通过，11 个模块，43 个测试。
 
 ## 1. 一句话现状
 
-责任链管线、三渠道（log/email/webhook）、注解接入、自动装配已经能跑；
-**Logback Appender（L0）、发布链路、质量门禁、Spring Event 桥接 / MDC 尚未完成**，
-这四项是 P0 剩余的主要缺口。P1 的聚合、升级、actuator health、启动诊断表也在排队。
+责任链管线、三渠道（log/email/webhook）、注解接入、L0 日志接入、自动装配已经能跑并有测试；
+**发布链路、质量门禁、Spring Event 桥接 / MDC 尚未完成**，这三项是 P0 剩余的主要缺口。
+P1 的聚合、升级、actuator health、启动诊断表也在排队。
 
 ## 2. 已实现（按设计书章节）
 
@@ -23,6 +23,7 @@
 | §9.9 失败落盘 | `FailureStore` SPI + `InMemoryFailureStore`（有界内存） | core | 间接 |
 | §9.11 队列 | 优先级队列、软上限 drop-lowest、绝不 CallerRuns | `notifyx-spring` `PriorityNotifyExecutor` | 部分 |
 | §8.3 L2 | `@AlarmProtect` / `@NotifyOn` + SpEL（默认禁方法调用） | `notifyx-spring` | 缺 AOP 测试 |
+| §8.1 L0 | Logback Appender：异步有界、噪声过滤、bizId 提取、双重防自递归、Spring 自动绑定 | `notifyx-logback` | `NotifyxAppenderTest` 等 20 个 + E2E |
 | §10.1 渠道 | log / email / webhook（HMAC + 时间戳 + 主机白名单） | `notifyx-channel-*` | 缺契约测试 |
 | §14 配置 | `NotifyxProperties` 全量属性 + 模块内渠道自动装配 | autoconfigure / channel 模块 | `ZeroDependencyStartupTest`（T13） |
 | §15.1 指标 | `NotifyMetrics` + Micrometer 适配 | core / autoconfigure | 无测试 |
@@ -31,7 +32,7 @@
 
 ### P0 剩余
 
-- [ ] **Logback Appender（L0，§8.1 / T7）** —— 下一个迭代（iter-01）
+- [x] **Logback Appender（L0，§8.1 / T7）** —— iter-01 完成（含 E2E）
 - [ ] **发布链路（§19.1）**：GPG、central-publishing、source/javadoc jar、POM 元数据校验
 - [ ] **质量门禁（§17.3）**：Spotless / Checkstyle / SpotBugs、checkstyle 规则、CI workflow
 - [ ] **Spring Event 桥接（L3，§8.4）+ MDC（§15.3）**
@@ -59,15 +60,17 @@ sms4j 适配。
 | D-003 | 失败落盘当前只有有界内存 `InMemoryFailureStore` | local-file / JDBC 属 P1 后续，先保证 SPI 与调用点正确 |
 | D-004 | 渠道自动配置放各自渠道模块，不放 autoconfigure | 避免 autoconfigure 依赖渠道 SDK（第 5 章依赖纪律） |
 | D-005 | 新增 `notifyx-logback` 模块（设计书模块树未列） | P0 明确要求 Logback Appender，但放进 autoconfigure 会污染依赖方向 |
+| D-007 | Appender 的 `extractBizId` 用子元素而非属性 | logback 1.5 的 model 解析器不把嵌套元素属性写入对象，属性写法静默失效 |
+| D-008 | 内部 logger 前缀硬编码（`io.github.pkyit.notifyx` / `NOTIFYX_`） | 防自递归优先于可配置性；配置化会引入新的自递归风险 |
 
 ## 5. 下一步队列
 
-1. **iter-01**：`notifyx-logback` + T7 防自递归 + 自动绑定 + README/sample 演示。
-2. **iter-02**：发布链路（central-publishing + GPG profile + source/javadoc）。
-3. **iter-03**：质量门禁 + CI（JDK 17/21 矩阵，`mvn verify`）。
-4. **iter-04**：Spring Event 桥接（L3）+ MDC。
-5. **iter-05**：P1 优雅关闭 + actuator health + 启动诊断表。
+1. **iter-02**：发布链路（central-publishing + GPG profile + source/javadoc + POM 元数据）。
+2. **iter-03**：质量门禁 + CI（JDK 17/21 矩阵，`mvn verify`）。
+3. **iter-04**：Spring Event 桥接（L3）+ MDC。
+4. **iter-05**：P1 优雅关闭 + actuator health + 启动诊断表。
+5. **iter-06**：渠道契约测试（webhook HMAC / email），补 ISSUE-010。
 
 ## 6. 当前分支
 
-`master`（iter-00 合并后）。工作分支命名见 README。
+`master`（iter-01 合并后）。工作分支命名见 README。

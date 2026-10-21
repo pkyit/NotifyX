@@ -49,6 +49,7 @@
         <module>notifyx-channel-log</module>
         <module>notifyx-channel-email</module>
         <module>notifyx-channel-webhook</module>
+        <module>notifyx-logback</module>
         <module>notifyx-sample</module>
     </modules>
 
@@ -84,7 +85,8 @@
                 <groupId>io.github.pkyit</groupId>
                 <artifactId>notifyx-spring-boot3-autoconfigure</artifactId>
                 <version>${project.version}</version>
-            </dependency>            <dependency>
+            </dependency>
+            <dependency>
                 <groupId>io.github.pkyit</groupId>
                 <artifactId>notifyx-spring-boot3-starter</artifactId>
                 <version>${project.version}</version>
@@ -102,6 +104,11 @@
             <dependency>
                 <groupId>io.github.pkyit</groupId>
                 <artifactId>notifyx-channel-webhook</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-logback</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

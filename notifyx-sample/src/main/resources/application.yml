@@ -31,6 +31,12 @@ notifyx:
       level: ERROR
       channels: [log]
       silent-window: 10m
+    # L0 日志接入：由 logback-spring.xml 里的 NotifyxAppender 产生
+    LOG_ERROR:
+      level: ERROR
+      channels: [log]
+      template: log-error
+      silent-window: 1m
   templates:
     engine: simple
     templates:
@@ -40,6 +46,12 @@ notifyx:
           订单 ${bizId} 创建失败
           原因：${reason}
           时间：${occurredAt}
+          实例：${instanceId}
+      log-error:
+        title: "【日志告警】${bizId}"
+        content: |
+          ${formattedMessage}
+          日志来源：${logger}
           实例：${instanceId}
   dedupe:
     enabled: true
