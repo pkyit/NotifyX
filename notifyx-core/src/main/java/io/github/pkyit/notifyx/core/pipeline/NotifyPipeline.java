@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import io.github.pkyit.notifyx.core.exception.ChannelException;
 import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
 import io.github.pkyit.notifyx.core.model.Level;
+import io.github.pkyit.notifyx.core.model.NotifyEnvelope;
 import io.github.pkyit.notifyx.core.model.NotifyEvent;
 import io.github.pkyit.notifyx.core.model.RenderFormat;
 import io.github.pkyit.notifyx.core.model.SendResult;
@@ -35,6 +36,7 @@ import io.github.pkyit.notifyx.core.spi.TemplateEngine;
 import io.github.pkyit.notifyx.core.spi.TraceContext;
 import io.github.pkyit.notifyx.core.support.Fingerprints;
 import io.github.pkyit.notifyx.core.support.LoggingAuditRecorder;
+import io.github.pkyit.notifyx.core.support.NotifyEnvelopeCodec;
 
 /**
  * 责任链管线：从事件到投递的唯一通道。
@@ -276,7 +278,7 @@ public final class NotifyPipeline {
                 || result.status() == SendResult.Status.FAIL_NON_RETRYABLE
                 || result.status() == SendResult.Status.CIRCUIT_OPEN);
         if (failed) {
-            persistFailure(event, channel.name(), result, maxAttempts);
+            persistFailure(event, channel.name(), result, maxAttempts, dedupeKey);
             notifyOnError(event, result);
         } else if (result != null && result.status() == SendResult.Status.SUCCESS) {
             notifyOnSuccess(event);
@@ -304,14 +306,23 @@ public final class NotifyPipeline {
         }
     }
 
-    private void persistFailure(NotifyEvent event, String channel, SendResult result, int attempts) {
+    private void persistFailure(NotifyEvent event, String channel, SendResult result, int attempts, String dedupeKey) {
         if (failureStore == null) {
             return;
         }
         try {
-            FailedRecord record = new FailedRecord(event.eventId(), RecordStatus.PENDING, 0, event.eventId(),
-                    channel, String.valueOf(result.failureReason()), attempts, System.currentTimeMillis(),
-                    System.currentTimeMillis() + 60_000L);
+            long now = System.currentTimeMillis();
+            String envelopeJson;
+            try {
+                envelopeJson = NotifyEnvelopeCodec.toJson(NotifyEnvelope.of(event, dedupeKey,
+                        resolveTraceId(event), resolveSpanId(event), instanceId, attempts, now));
+            } catch (RuntimeException codecFailure) {
+                // 报文序列化失败不能让落盘整体失败：退化为 eventId，至少留下线索
+                log.debug("envelope serialization failed: {}", codecFailure.toString());
+                envelopeJson = event.eventId();
+            }
+            FailedRecord record = new FailedRecord(event.eventId(), RecordStatus.PENDING, 0, envelopeJson,
+                    channel, String.valueOf(result.failureReason()), attempts, now, now + 60_000L);
             failureStore.save(record);
             log.warn("event persisted for compensation eventId={} channel={}", event.eventId(), channel);
         } catch (RuntimeException ex) {

@@ -147,11 +147,13 @@
 - **影响**：罕见但难排查；示例工程已规避。
 - **计划**：P1 增加 `notifyx.logback.exclude-logger-prefixes`（或 Appender 属性），并校验不能移除默认前缀。
 
-## ISSUE-015 失败记录自动补偿未实现（需要 NotifyEnvelope 序列化）
-- **状态**：OPEN（P2/P3）
-- **现象**：iter-10 已把失败记录落盘并可读回/改状态，但「自动补偿任务」尚不可用：
-  `persistFailure` 写入的 `envelopeJson` 目前只是 `eventId`，无法据此重建完整事件重投。
-- **证据**：`NotifyPipeline.persistFailure` 构造 `FailedRecord` 时 envelope 参数为 `event.eventId()`。
+## ISSUE-015 失败记录自动补偿未实现（runner 待做）
+- **状态**：OPEN（iter-15 已备好报文契约）
+- **现象**：失败记录可落盘/读回/改状态，但「自动补偿任务」尚不可用。
+- **iter-15 进展**：`NotifyEnvelope`（§6.5）+ `NotifyEnvelopeCodec` + 零依赖 `JsonCodec` 已完成；
+  `persistFailure` 现在写入可还原的完整报文（序列化失败才退化为 eventId），并有落盘解码测试。
+- **仍缺**：`FailureCompensationRunner`：定时扫描 `loadPending` → CAS `SENDING` → 重建事件重投 →
+  `SENT`/`DEAD` + 退避；需要管线提供「同步投递结果」或采用最佳努力语义。
 - **影响**：失败落盘目前是「留痕 + 人工可查」，不是「自动恢复」；关闭时未排空事件仍只 warn。
 - **计划**：先定义 `NotifyEnvelope`（§6.5）及其序列化/反序列化（core 零依赖或 optional JSON），
   再实现 `FailureCompensationRunner`：CAS 抢占 → 重投 → SENT/DEAD + 退避。
