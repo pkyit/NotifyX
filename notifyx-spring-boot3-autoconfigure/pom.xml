@@ -19,9 +19,16 @@
         <dependency>
             <groupId>io.github.pkyit</groupId>
             <artifactId>notifyx-spring</artifactId>
-        </dependency>        <dependency>
+        </dependency>
+        <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- Actuator 是可选能力：不引 actuator 的应用完全不受影响（@ConditionalOnClass name 守护） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator</artifactId>
             <optional>true</optional>
         </dependency>
 

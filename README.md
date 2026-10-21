@@ -296,9 +296,32 @@ public EventFilter debugOnlyFilter() {
 - Trace：MDC 里的 `traceId`/`spanId` 自动进入模板、渠道上下文与审计（Micrometer / SkyWalking 均可）
 - 渠道：log（默认开）、email、webhook（HMAC-SHA256 + 时间戳防重放 + 主机白名单）
 - L0：`notifyx-logback` Appender（异步有界、噪声过滤、业务主键提取、双重防自递归）
+- 可观测性：启动诊断表、`/actuator/health` 的 `notifyx` 组件（UP/DEGRADED/DOWN/OUT_OF_SERVICE）
+- 生命周期：`SmartLifecycle` 优雅关闭（先排空队列、再释放渠道），队列满/关闭均有日志与指标
 - 自动装配：全量 `@ConditionalOnMissingBean`、零依赖启动测试（T13）、Micrometer 指标
 
 规划中（设计书后续阶段）：Redis 分布式去重/限流、MQ 总线与 consumer、MyBatis-Plus 审计落库、Admin 控制台、IM 渠道（钉钉/企微/飞书）、sms4j 适配。
+
+## 可观测性与生命周期
+
+启动后会打印一张能力表（渠道、SPI 实现、单机降级提示、熔断阈值），排查时比翻文档快：
+
+```text
+│ NotifyX dev  ·  mode=local  ·  tier=T0（单机内存）
+│ 渠道（1 启用 / 1 已注册）
+│   ✅ log  LogChannel
+│ SPI 装配
+│   去重   MemoryDedupeStore  ⚠ 单机内存，多实例部署下能力受限
+```
+
+- `notifyx.diagnostics.banner=false` 关闭诊断表。
+- 引入 `spring-boot-starter-actuator` 后自动出现 `notifyx` 健康组件：
+  `UP` / `DEGRADED`（内存去重/限流或多渠道部分不可用，K8s readiness 仍为 UP）/
+  `DOWN`（全局静默或无渠道）/ `OUT_OF_SERVICE`（`notifyx.enabled=false`）。
+- **默认不做真实探活**（`probe-enabled=false`），避免 K8s 每 10 秒的健康检查变成 8640 条垃圾消息；
+  需要真实探活时显式开启 `notifyx.actuator.health.probe-enabled=true`。
+- 关闭时 `NotifyxLifecycle` 在 `notifyx.async.shutdown-await`（默认 10s）内排空队列，再关闭渠道；
+  K8s 的 `terminationGracePeriodSeconds` 必须大于该值（建议 30s）。
 
 ## 兼容性
 
@@ -326,7 +349,7 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**54 个 core 测试 + 20 个 logback 测试 + 3 个装配测试**，CI 矩阵 JDK 17/21。
+当前基线：**106 个测试**（core 61 / spring 6 / autoconfigure 19 / logback 20），CI 矩阵 JDK 17/21。
 
 ## 发布
 

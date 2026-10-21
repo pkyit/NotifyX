@@ -169,3 +169,17 @@
 - **影响**：模板配置**不支持** Spring 占位符（例如 `notifyx.templates.x.title=${spring.application.name}`
   不会被替换）。这是刻意的：模板变量只由事件参数填充。已写进 README 与发布测试。
 - **复审条件**：若未来支持 FreeMarker/Thymeleaf 等外部模板（P2），在模板引擎层统一占位符语义。
+
+## D-012 优雅关闭的 phase 晚于 Web 优雅停机
+
+- **日期**：2026-10-22（iter-05）
+- **状态**：生效
+- **背景**：设计书 §9.10 写「phase 设为较早（比 Web 容器先停）」。但实际顺序上，
+  先让 Web 容器停止接收新请求、再排空通知队列，才能避免关闭窗口里涌入的新事件被直接拒绝；
+  同时 `SmartLifecycle` 仍早于普通 Bean 销毁，数据源/Redis 依旧可用（这是不用 `@PreDestroy` 的原因）。
+- **决策**：`NotifyxLifecycle.PHASE = SmartLifecycle.DEFAULT_PHASE - 2048`，
+  低于 Spring Boot Web 优雅停机阶段、高于普通 Bean 销毁；关闭期间新事件被
+  `PriorityNotifyExecutor` 拒绝并记 warn，等失败落盘实现（D-003）后再改为落盘补偿。
+- **理由**：最大限度减少「关闭过程中丢通知」的窗口；与 §9.10 的核心目的（依赖仍可用时排空）一致。
+- **影响**：如果部署方自行调整 Web 优雅停机 phase，需要重新评估本值。
+- **复审条件**：失败落盘文件实现后，补充「关闭时未排空事件落盘」并重估 phase。

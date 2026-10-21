@@ -344,6 +344,54 @@ public class NotifyxAutoConfiguration {
     }
 
     /**
+     * 优雅关闭：先排空通知队列，再释放渠道资源（设计书 9.10）。
+     *
+     * @param taskExecutor 执行器
+     * @param channels 渠道
+     * @param properties 配置
+     * @return 生命周期
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public NotifyxLifecycle notifyxLifecycle(NotifyTaskExecutor taskExecutor,
+                                             ObjectProvider<NotifyChannel> channels,
+                                             NotifyxProperties properties) {
+        return new NotifyxLifecycle(taskExecutor, channels.orderedStream().toList(),
+                properties.getAsync().getShutdownAwait());
+    }
+
+    /**
+     * 启动诊断表（设计书 14.4 第 6 条）。
+     *
+     * @param properties 配置
+     * @param channels 渠道
+     * @param templateEngine 模板引擎
+     * @param templates 模板表
+     * @param dedupeStore 去重存储
+     * @param rateLimiter 限流器
+     * @param failureStore 失败存储
+     * @param auditRecorder 审计器
+     * @param masker 脱敏器
+     * @param taskExecutor 执行器
+     * @return 诊断器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public NotifyxDiagnostics notifyxDiagnostics(NotifyxProperties properties,
+                                                 ObjectProvider<NotifyChannel> channels,
+                                                 TemplateEngine templateEngine,
+                                                 Map<String, MessageTemplate> templates,
+                                                 DedupeStore dedupeStore,
+                                                 RateLimiter rateLimiter,
+                                                 FailureStore failureStore,
+                                                 AuditRecorder auditRecorder,
+                                                 Masker masker,
+                                                 NotifyTaskExecutor taskExecutor) {
+        return new NotifyxDiagnostics(properties, channels.orderedStream().toList(), templateEngine, templates,
+                dedupeStore, rateLimiter, failureStore, auditRecorder, masker, taskExecutor);
+    }
+
+    /**
      * 注解切面。
      *
      * @param notifyKit 门面

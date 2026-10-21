@@ -70,22 +70,24 @@
   并在 `ZeroDependencyStartupTest` 用系统属性 `userName=admin` 固定该行为。
 
 ## ISSUE-005 优雅关闭只有执行器 destroy，缺少端到端验证（§9.10）
-- **状态**：OPEN（计划 iter-05）
+- **状态**：CLOSED（iter-05）
 - **现象**：`PriorityNotifyExecutor.destroy()` 已实现 `shutdown → awaitTermination → shutdownNow`，
-  但没有测试证明「Spring 上下文关闭时，队列中的通知要么发完要么被计数丢弃」；
-  `DefaultNotifyKit` 的异步提交与执行器关闭顺序未验证。
+  但没有测试证明「Spring 上下文关闭时，队列中的通知要么发完要么被计数丢弃」。
 - **证据**：`PriorityNotifyExecutor.java:128-140`；无 shutdown 相关测试。
 - **影响**：发布重启时可能静默丢通知，且日志里没有丢弃计数。
-- **计划**：iter-05 补 `GracefulShutdownTest`（ApplicationContextRunner + 慢渠道 + close），
-  校验丢弃计数写入 `NotifyMetrics`。
+- **关闭方式**：新增 `NotifyxLifecycle`（SmartLifecycle）在容器关闭早期排空队列并关闭渠道；
+  `NotifyxLifecycleTest` 覆盖排空、幂等、普通执行器降级、phase。未排空事件目前只 warn，
+  落盘补偿等 D-003 的文件实现。
 
 ## ISSUE-006 actuator Health / 启动诊断表未实现（§15.2 / §14.4）
-- **状态**：OPEN（计划 iter-05）
+- **状态**：CLOSED（iter-05）
 - **现象**：`HealthStatus` 模型存在于 core，但没有任何 `HealthIndicator` 实现；
   `NotifyxProperties.Diagnostics` 只有 `banner` / `fail-fast` 两个开关，没有「能力表」输出。
 - **证据**：grep `HealthIndicator` 无结果；`NotifyxProperties.Diagnostics` 字段仅 2 个。
 - **影响**：运维无法一眼看出「当前哪些能力降级为内存实现」——这正是 §14.4 诊断表的目的。
-- **计划**：iter-05 实现 `NotifyxHealthIndicator` 与启动 banner 的能力表。
+- **关闭方式**：`NotifyxHealthIndicator`（UP/DEGRADED/DOWN/OUT_OF_SERVICE，默认不探活）
+  + `NotifyxDiagnostics` 启动能力表；`NotifyxActuatorAutoConfiguration` 在无 actuator 时零影响。
+  E2E：`/actuator/health` 的 notifyx 组件返回 DEGRADED + 内存降级原因。
 
 ## ISSUE-007 聚合（§9.5）与升级（§9.6）未实现
 - **状态**：OPEN（P1 后续）

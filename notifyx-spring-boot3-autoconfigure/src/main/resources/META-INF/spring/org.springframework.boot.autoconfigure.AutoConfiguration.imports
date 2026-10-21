@@ -1,2 +1,3 @@
-io.github.pkyit.notifyx.autoconfigure.NotifyxMetricsAutoConfiguration
 io.github.pkyit.notifyx.autoconfigure.NotifyxAutoConfiguration
+io.github.pkyit.notifyx.autoconfigure.NotifyxMetricsAutoConfiguration
+io.github.pkyit.notifyx.autoconfigure.NotifyxActuatorAutoConfiguration
