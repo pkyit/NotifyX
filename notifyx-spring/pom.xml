@@ -11,6 +11,12 @@
     <artifactId>notifyx-spring</artifactId>
     <name>NotifyX Spring</name>
     <description>AOP、Spring Event 桥接、异步优先级队列、MDC</description>
+
+    <properties>
+        <!-- AOP/SpEL 尚未补测试；先按当前基线设 ratchet，见 ISSUE-013 -->
+        <jacoco.minimum>0.20</jacoco.minimum>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.github.pkyit</groupId>
@@ -49,6 +55,11 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -1,15 +1,15 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-03 完成：质量门禁）
+> 更新时间：2026-10-22（iter-04 完成：L3 Spring Event + Trace）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 11 个模块，73 个测试；`mvn -Prelease -Dgpg.skip=true verify` 通过，sources/javadoc 产物齐全。
+> 11 个模块，92 个测试；`mvn -Prelease -Dgpg.skip=true verify` 通过，sources/javadoc 产物齐全。
 
 ## 1. 一句话现状
 
-责任链管线、三渠道（log/email/webhook）、注解接入、L0 日志接入、自动装配、发布链路都已就绪；
-**质量门禁 / CI、Spring Event 桥接 / MDC 尚未完成**，这是 P0 剩余的两个缺口。
-P1 的聚合、升级、actuator health、启动诊断表也在排队。
+责任链管线、三渠道、L0 日志接入、L2 注解、L3 Spring Event、Trace 贯通、自动装配、发布链路、
+质量门禁都已就绪。**P0 只剩 ADR-001 alias artifact**；P1 的聚合、升级、优雅关闭验证、
+actuator health、启动诊断表在排队。
 
 ## 2. 已实现（按设计书章节）
 
@@ -36,7 +36,7 @@ P1 的聚合、升级、actuator health、启动诊断表也在排队。
 - [x] **Logback Appender（L0，§8.1 / T7）** —— iter-01 完成（含 E2E）
 - [x] **发布链路（§19.1）** —— iter-02 完成配置与本地验证（实际 deploy 待 Central 账号 + GPG 私钥）
 - [x] **质量门禁（§17.3）** —— iter-03 完成（Spotless / Checkstyle / JaCoCo / CI workflow）
-- [ ] **Spring Event 桥接（L3，§8.4）+ MDC（§15.3）**
+- [x] **Spring Event 桥接（L3，§8.4）+ Trace（§15.3）** —— iter-04 完成（含 E2E）
 - [ ] **ADR-001 alias artifact 发布策略**（`notifyx-spring-boot3-starter` relocation）
 
 ### P1
@@ -65,15 +65,16 @@ sms4j 适配。
 | D-008 | 内部 logger 前缀硬编码（`io.github.pkyit.notifyx` / `NOTIFYX_`） | 防自递归优先于可配置性；配置化会引入新的自递归风险 |
 | D-009 | starter 增加 `NotifyxStarter` 标记类 | Central 强制要求 sources/javadoc，空模块产不出；用最小标记类闭环 |
 | D-010 | 质量门禁用轻量格式检查 + Checkstyle 10.x + 覆盖率 ratchet | 全量重排 diff 过大；Checkstyle 14.x 需 JDK 21；覆盖率需逐步抬升 |
+| D-011 | 模板配置用 identity PlaceholdersResolver 的 Binder 读取 | Spring 会把 `${userName}` 当环境变量解析成 `admin`，模板占位符必须与框架占位符隔离 |
 
 ## 5. 下一步队列
 
-1. **iter-04**：Spring Event 桥接（L3）+ MDC。
-2. **iter-05**：P1 优雅关闭 + actuator health + 启动诊断表。
-3. **iter-06**：渠道契约测试（webhook HMAC / email），补 ISSUE-010。
-4. **持续**：ISSUE-013 覆盖率抬升（core 67.7% → 80% → 90%）。
+1. **iter-05**：P1 优雅关闭验证 + actuator health + 启动诊断表。
+2. **iter-06**：渠道契约测试（webhook HMAC / email），补 ISSUE-010。
+3. **P0 收尾**：ADR-001 alias artifact（依赖壳 + relocation 提示）。
+4. **持续**：ISSUE-013 覆盖率抬升（core 67.7% → 80% → 90%；spring 21.6% → 60%+）。
 5. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-03 合并后）。工作分支命名见 README。
+`master`（iter-04 合并后）。工作分支命名见 README。

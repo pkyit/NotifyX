@@ -13,12 +13,17 @@ import org.slf4j.LoggerFactory;
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 import io.github.pkyit.notifyx.core.model.Level;
 import io.github.pkyit.notifyx.core.model.NotifyEvent;
+import io.github.pkyit.notifyx.core.spi.TraceContext;
+import io.github.pkyit.notifyx.core.support.MdcTraceContext;
 
 /**
  * {@link NotifyKit} 默认实现：组装事件后提交给管线。
  *
  * <p>异步模式下调用线程只做事件组装与入队，耗时可控在毫秒级；同步模式仅用于
  * {@code event.async(false)} 的极少数「必须确认送达」场景。</p>
+ *
+ * <p>traceId/spanId 在<b>调用线程</b>抓取并写进事件标签：异步投递后 MDC 已不可见，
+ * 这一步是「告警里能带上链路 ID」的关键（设计书 15.3）。</p>
  *
  * <p>@implNote 线程安全；{@code executor} 为 null 时退化为同步执行。</p>
  *
@@ -36,16 +41,29 @@ public final class DefaultNotifyKit implements NotifyKit {
 
     private final NotifyPipeline pipeline;
     private final NotifyTaskExecutor executor;
+    private final TraceContext traceContext;
+
+    /**
+     * 构造门面，默认从 MDC 读取 trace。
+     *
+     * @param pipeline 管线
+     * @param executor 异步执行器；null 表示同步
+     */
+    public DefaultNotifyKit(NotifyPipeline pipeline, NotifyTaskExecutor executor) {
+        this(pipeline, executor, new MdcTraceContext());
+    }
 
     /**
      * 构造门面。
      *
      * @param pipeline 管线
      * @param executor 异步执行器；null 表示同步
+     * @param traceContext trace 读取口，null 表示不采集
      */
-    public DefaultNotifyKit(NotifyPipeline pipeline, NotifyTaskExecutor executor) {
+    public DefaultNotifyKit(NotifyPipeline pipeline, NotifyTaskExecutor executor, TraceContext traceContext) {
         this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
         this.executor = executor;
+        this.traceContext = traceContext == null ? TraceContext.none() : traceContext;
     }
 
     @Override
@@ -78,12 +96,12 @@ public final class DefaultNotifyKit implements NotifyKit {
 
     @Override
     public void send(String scene, Map<String, ?> params) {
-        send(NotifyEvent.builder(scene).params(params).build());
+        send(traced(scene).params(params).build());
     }
 
     @Override
     public void send(String scene, String receiver, Map<String, ?> params) {
-        send(NotifyEvent.builder(scene).receiver(receiver).params(params).build());
+        send(traced(scene).receiver(receiver).params(params).build());
     }
 
     @Override
@@ -101,10 +119,29 @@ public final class DefaultNotifyKit implements NotifyKit {
         if (context != null) {
             flatten(context, params);
         }
-        send(NotifyEvent.builder(scene)
+        send(traced(scene)
                 .level(Level.ERROR)
                 .params(params)
                 .build());
+    }
+
+    /**
+     * 事件构建器，带上调用线程的 trace 标签。
+     *
+     * @param scene 场景码
+     * @return 构建器
+     */
+    private NotifyEvent.Builder traced(String scene) {
+        NotifyEvent.Builder builder = NotifyEvent.builder(scene);
+        String traceId = traceContext.traceId();
+        if (traceId != null) {
+            builder.tag("traceId", traceId);
+        }
+        String spanId = traceContext.spanId();
+        if (spanId != null) {
+            builder.tag("spanId", spanId);
+        }
+        return builder;
     }
 
     private static void flatten(Object[] context, Map<String, Object> params) {

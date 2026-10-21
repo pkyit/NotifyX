@@ -44,6 +44,7 @@ public class NotifyxProperties {
     private final Mask mask = new Mask();
     private final Spel spel = new Spel();
     private final Diagnostics diagnostics = new Diagnostics();
+    private final Events events = new Events();
 
     public boolean isEnabled() {
         return enabled;
@@ -139,6 +140,10 @@ public class NotifyxProperties {
 
     public Diagnostics getDiagnostics() {
         return diagnostics;
+    }
+
+    public Events getEvents() {
+        return events;
     }
 
     /** 异步执行配置。 */
@@ -963,6 +968,25 @@ public class NotifyxProperties {
 
         public void setFailFast(boolean failFast) {
             this.failFast = failFast;
+        }
+    }
+
+    /** L3 Spring Event 桥接配置（设计书 8.4）。 */
+    public static class Events {
+        private boolean enabled = true;
+        /** 事件类全限定名 → 场景码；事件类可以不依赖任何 NotifyX 注解。 */
+        private final Map<String, String> mappings = new LinkedHashMap<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public Map<String, String> getMappings() {
+            return mappings;
         }
     }
 }
