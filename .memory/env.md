@@ -41,14 +41,15 @@
 **用途规划**：P1 之后做「多实例重复发送」验证（§11.5 选型表）、优雅关闭滚动发布验证、
 Admin/Consumer 部署验证。SDK 阶段不依赖 k8s。
 
-## 4. 构建基线（iter-06 实测）
+## 4. 构建基线（iter-07 实测）
 
 ```text
-mvn -B clean verify   → BUILD SUCCESS，11 模块，118 tests，0 failures
+mvn -B clean verify   → BUILD SUCCESS，12 模块，118 tests，0 failures
                          Spotless 0 violation / Checkstyle 0 violation
                          JaCoCo：core 67.7%（门禁 65%）、spring 21.6%（门禁 20%）、
                                  autoconfigure 41.7%（门禁 40%）、logback 85.2%（门禁 80%）、
                                  channel-webhook 84.7%（门禁 80%）
+mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/javadoc
 构建耗时（增量）约 40 秒；首次含插件下载约 2 分钟
 ```
 

@@ -45,6 +45,7 @@
         <module>notifyx-core</module>
         <module>notifyx-spring</module>
         <module>notifyx-spring-boot3-autoconfigure</module>
+        <module>notifyx-spring-boot-starter</module>
         <module>notifyx-spring-boot3-starter</module>
         <module>notifyx-channel-log</module>
         <module>notifyx-channel-email</module>
@@ -96,6 +97,11 @@
             <dependency>
                 <groupId>io.github.pkyit</groupId>
                 <artifactId>notifyx-spring-boot3-autoconfigure</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

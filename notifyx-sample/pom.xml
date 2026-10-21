@@ -14,7 +14,7 @@
     <dependencies>
         <dependency>
             <groupId>io.github.pkyit</groupId>
-            <artifactId>notifyx-spring-boot3-starter</artifactId>
+            <artifactId>notifyx-spring-boot-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.pkyit</groupId>

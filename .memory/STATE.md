@@ -1,15 +1,15 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-06 完成：Webhook 契约测试）
+> 更新时间：2026-10-22（iter-07 完成：ADR-001 alias artifact）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 11 个模块，118 个测试；`mvn -Prelease -Dgpg.skip=true verify` 通过，sources/javadoc 产物齐全。
+> 12 个模块，118 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
-优雅关闭、actuator health、启动诊断表都已就绪。**P0 只剩 ADR-001 alias artifact**；
-P1 的聚合、升级、失败落盘补偿在排队。
+优雅关闭、actuator health、启动诊断表、双 starter 坐标都已就绪。
+**P0 代码工作全部完成**（实际 deploy 需外部凭据）；P1 的聚合、升级、失败落盘补偿在排队。
 
 ## 2. 已实现（按设计书章节）
 
@@ -39,7 +39,7 @@ P1 的聚合、升级、失败落盘补偿在排队。
 - [x] **发布链路（§19.1）** —— iter-02 完成配置与本地验证（实际 deploy 待 Central 账号 + GPG 私钥）
 - [x] **质量门禁（§17.3）** —— iter-03 完成（Spotless / Checkstyle / JaCoCo / CI workflow）
 - [x] **Spring Event 桥接（L3，§8.4）+ Trace（§15.3）** —— iter-04 完成（含 E2E）
-- [ ] **ADR-001 alias artifact 发布策略**（`notifyx-spring-boot3-starter` relocation）
+- [x] **ADR-001 alias artifact 发布策略** —— iter-07 完成（主坐标 + relocation + 依赖壳，relocation 实测生效）
 
 ### P1
 
@@ -69,14 +69,14 @@ sms4j 适配。
 | D-010 | 质量门禁用轻量格式检查 + Checkstyle 10.x + 覆盖率 ratchet | 全量重排 diff 过大；Checkstyle 14.x 需 JDK 21；覆盖率需逐步抬升 |
 | D-011 | 模板配置用 identity PlaceholdersResolver 的 Binder 读取 | Spring 会把 `${userName}` 当环境变量解析成 `admin`，模板占位符必须与框架占位符隔离 |
 | D-012 | 优雅关闭 phase 晚于 Web 优雅停机 | 先停新流量再排空通知，关闭窗口丢事件最少；仍早于数据源销毁 |
+| D-013 | alias 坐标用 relocation + 依赖壳 + 标记类 | 同时满足 ADR-001 与 §19.2；标记类解决 Central 对空 jar 的 sources/javadoc 校验 |
 
 ## 5. 下一步队列
 
-1. **iter-07**：ADR-001 alias artifact（主坐标 + `-boot3-` 依赖壳/relocation）。
-2. **P1 继续**：聚合（§9.5）、升级（§9.6）、失败落盘补偿（D-003）。
-3. **测试债**：email 渠道契约测试（ISSUE-010）；ISSUE-013 覆盖率抬升。
-4. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
+1. **P1 继续**：聚合（§9.5）、升级（§9.6）、失败落盘补偿（D-003）。
+2. **测试债**：email 渠道契约测试（ISSUE-010）；ISSUE-013 覆盖率抬升（core 67.7% → 90%、spring 21.6% → 60%+）。
+3. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-06 合并后）。工作分支命名见 README。
+`master`（iter-07 合并后）。工作分支命名见 README。

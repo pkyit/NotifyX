@@ -57,6 +57,30 @@ mvn dependency:get -Dartifact=io.github.pkyit:notifyx-core:1.0.0
 再检查 <https://central.sonatype.com/artifact/io.github.pkyit/notifyx-core> 的
 POM、sources、javadoc 三个附件齐全。
 
+### 两个 starter 坐标（ADR-001）
+
+发布物里有两个 starter：
+
+| 坐标 | 角色 | 发布要求 |
+| --- | --- | --- |
+| `notifyx-spring-boot-starter` | **主坐标**，README / 快速开始只推它 | 正常 jar + sources + javadoc |
+| `notifyx-spring-boot3-starter` | 归档 alias，POM 带 `<relocation>` 指向主坐标 | 同样要有 sources/javadoc（jar 里只有一个标记类） |
+
+发布后用一个临时工程验证 relocation 生效：
+
+```xml
+<dependency>
+  <groupId>io.github.pkyit</groupId>
+  <artifactId>notifyx-spring-boot3-starter</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+```bash
+mvn dependency:tree
+# 期望看到 WARNING: ... has been relocated to io.github.pkyit:notifyx-spring-boot-starter ...
+```
+
 ## 5. 版本策略（§19.3）
 
 | 变更 | 版本 |
