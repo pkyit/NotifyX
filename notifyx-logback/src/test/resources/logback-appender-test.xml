@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L0 配置样例（设计书 8.1 的落地版），本文件同时是 Appender 的配置契约测试输入。
+
+  与设计书 8.1 原文的唯一差异：extractBizId 用子元素而不是属性。
+  原因：logback 1.5（Boot 3.5 默认）的 model 解析器不把嵌套元素上的属性写入对象，
+  <extractBizId regex=".." group=".."/> 会被静默忽略（见 .memory/decisions.md D-007）。
+  Appender 启动检测到这种情况时会写一条 WARN 到 logback status。
+-->
+<configuration>
+    <appender name="NOTIFYX" class="io.github.pkyit.notifyx.logback.NotifyxAppender">
+        <scene>ORDER_CREATE_FAIL</scene>
+        <level>ERROR</level>
+        <marker>ALARM</marker>
+        <extractBizId>
+            <regex>orderId=(\w+)</regex>
+            <group>1</group>
+        </extractBizId>
+        <suppressRegex>Connection reset|Broken pipe</suppressRegex>
+        <maxStackTraceLines>30</maxStackTraceLines>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+    </appender>
+
+    <logger name="com.example" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="NOTIFYX"/>
+    </root>
+</configuration>

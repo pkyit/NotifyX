@@ -3,6 +3,10 @@ package io.github.pkyit.notifyx.sample;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Marker;
+import org.slf4j.MarkerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -10,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 
 /**
- * 示例接口：一行门面调用与通知风暴模拟。
+ * 示例接口：一行门面调用、异常告警、通知风暴与 L0 日志接入。
  *
  * <p>@implNote 线程安全。</p>
  *
@@ -18,6 +22,14 @@ import io.github.pkyit.notifyx.core.api.NotifyKit;
  */
 @RestController
 public class SampleController {
+
+    /**
+     * 模拟存量业务系统的 logger。刻意不叫 {@code io.github.pkyit.notifyx.*}：
+     * Appender 会过滤这个前缀（防自递归），示例要演示的是「业务方自己的日志」。
+     */
+    private static final Logger legacyLog = LoggerFactory.getLogger("com.example.legacy.OrderService");
+
+    private static final Marker ALARM = MarkerFactory.getMarker("ALARM");
 
     private final NotifyKit notifyKit;
 
@@ -54,6 +66,18 @@ public class SampleController {
             notifyKit.alarm("ORDER_CREATE_FAIL", ex, Map.of("orderId", orderNo));
         }
         return Map.of("sent", true, "scene", "ORDER_CREATE_FAIL");
+    }
+
+    /**
+     * L0 演示：只打一条带 ALARM marker 的 ERROR 日志，由 NotifyxAppender 转成事件。
+     *
+     * @param orderNo 订单号
+     * @return 结果
+     */
+    @GetMapping("/demo/log-error")
+    public Map<String, Object> logError(@RequestParam(defaultValue = "SO20261022003") String orderNo) {
+        legacyLog.error(ALARM, "orderId={} 支付回调超时（L0 日志接入演示，业务代码未调用 NotifyX）", orderNo);
+        return Map.of("logged", true, "scene", "LOG_ERROR", "orderNo", orderNo);
     }
 
     /**

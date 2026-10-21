@@ -84,3 +84,36 @@
 - **理由**：运行期不可变让 Filter 链完全无锁，也避免配置读取成为热点。
 - **影响**：Admin 热更新前需评估注册表替换的可见性（P4）。
 - **复审条件**：P4 做 Admin 配置同步时。
+
+## D-007 Appender 的 `extractBizId` 用子元素而非属性
+
+- **日期**：2026-10-22（iter-01）
+- **状态**：生效
+- **背景**：设计书 §8.1 示例为 `<extractBizId regex="orderId=(\w+)" group="1"/>`。
+  实测 logback 1.5.34（Boot 3.5 默认）的 model 解析器**只读取嵌套元素的 `class` 属性**，
+  普通属性不会写入对象：Joran status 显示 “Assuming default type [ExtractBizId]”，
+  随后直接 `appender started`，`getRegex()` 为 null——静默失效，最危险的那种失败。
+- **决策**：配置写法改为
+  ```xml
+  <extractBizId>
+      <regex>orderId=(\w+)</regex>
+      <group>1</group>
+  </extractBizId>
+  ```
+  同时提供扁平写法 `<extractBizIdRegex>` / `<extractBizIdGroup>`；
+  启动时若发现 `ExtractBizId` 存在但 regex 为空，写一条 WARN 到 logback status，
+  把「抄了旧文档」变成可见告警而不是静默失效。
+- **理由**：必须与 Boot 3.5 真实运行时一致；文档再漂亮，解析不了就是 bug。
+- **影响**：README 与示例统一用子元素；与设计书 §8.1 存在文字差异（已在 README 标注）。
+- **复审条件**：logback 修复嵌套属性解析后，恢复属性写法并保留子元素兼容。
+
+## D-008 内部 logger 前缀硬编码，不做配置化
+
+- **日期**：2026-10-22（iter-01）
+- **状态**：临时
+- **背景**：防自递归要求过滤 NotifyX 自身日志。实现硬编码两个前缀：
+  `io.github.pkyit.notifyx`（框架 logger）与 `NOTIFYX_`（审计/兜底渠道 logger）。
+- **决策**：P0 不做配置化；若业务方把自有代码放在 `io.github.pkyit.notifyx.*` 下会被一起过滤。
+- **理由**：配置化会引入「用户写错前缀 → 自递归风暴」的新风险；硬编码覆盖 99.9% 场景。
+- **影响**：示例工程必须用 `com.example.*` logger 才能演示（已改）。见 ISSUE-012。
+- **复审条件**：P1 做诊断表时，评估增加 `exclude-logger-prefixes` 配置并加安全校验。

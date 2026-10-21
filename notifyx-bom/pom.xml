@@ -59,6 +59,11 @@
                 <artifactId>notifyx-channel-webhook</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-logback</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- L0 接入演示：业务代码一行不改，靠 marker 把 ERROR 日志接进 NotifyX（设计书 8.1） -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <appender name="NOTIFYX" class="io.github.pkyit.notifyx.logback.NotifyxAppender">
+        <scene>LOG_ERROR</scene>
+        <level>ERROR</level>
+        <marker>ALARM</marker>
+        <extractBizId>
+            <regex>orderId=([\w-]+)</regex>
+            <group>1</group>
+        </extractBizId>
+        <suppressRegex>Connection reset|Broken pipe</suppressRegex>
+        <maxStackTraceLines>30</maxStackTraceLines>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="NOTIFYX"/>
+    </root>
+</configuration>

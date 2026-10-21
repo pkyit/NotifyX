@@ -114,14 +114,52 @@ public class OrderService {
 | `notifyx-channel-log` | 兜底日志渠道 | core |
 | `notifyx-channel-email` | Jakarta Mail | core + jakarta.mail |
 | `notifyx-channel-webhook` | 通用 HTTP + HMAC 签名 | core |
+| `notifyx-logback` | L0 日志即告警（Logback Appender） | core + logback（provided） |
 | `notifyx-sample` | 可运行验收示例 | starter + 三渠道 |
 
 ## 接入方式
 
 | 层级 | 方式 | 侵入度 |
 | --- | --- | --- |
+| L0 | Logback Appender（`notifyx-logback`）：日志即告警，业务代码一行不改 | 0 |
 | L2 | `@AlarmProtect(scene = "PAY_CALLBACK_FAIL")` / `@NotifyOn(scene = "...", when = "#r.code != 0")` | 一个注解 |
 | L4 | `notifyKit.alarm(scene, ex, ctx...)` / `notifyKit.send(scene, params)` | 一行调用 |
+
+### L0 · 日志即告警（存量项目首选）
+
+引 `notifyx-logback`，在 `logback-spring.xml` 里挂一个 appender：
+
+```xml
+<appender name="NOTIFYX" class="io.github.pkyit.notifyx.logback.NotifyxAppender">
+    <scene>LOG_ERROR</scene>
+    <level>ERROR</level>
+    <marker>ALARM</marker>                     <!-- 只抓带此 marker 的日志 -->
+    <extractBizId>
+        <regex>orderId=(\w+)</regex>
+        <group>1</group>
+    </extractBizId>
+    <suppressRegex>Connection reset|Broken pipe</suppressRegex>
+    <maxStackTraceLines>30</maxStackTraceLines>
+    <queueSize>1024</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+</appender>
+```
+
+业务代码只需要一个 marker：
+
+```java
+private static final Marker ALARM = MarkerFactory.getMarker("ALARM");
+log.error(ALARM, "orderId={} 支付回调超时", orderNo);
+```
+
+Appender 的保证：**异步有界队列**（绝不阻塞日志线程）、队列满即丢弃并计数、
+内部异常全部吞掉、**双重防自递归**（NotifyX logger 前缀过滤 + 投递线程重入保护）。
+Spring 环境自动把 `NotifyKit` 注入 appender；非 Spring 环境手动 `appender.setNotifyKit(kit)`。
+
+> ⚠️ logback 1.5 的解析器不支持在嵌套元素上写属性，`<extractBizId regex=".." group=".."/>`
+> 会被静默忽略（启动时会在 logback status 里告警）。请使用上面的子元素写法，
+> 或扁平写法 `<extractBizIdRegex>orderId=(\w+)</extractBizIdRegex>`。
+
 
 注解语义：`@AlarmProtect` 只在抛异常时触发，**异常原样抛出**；`@NotifyOn` 在 SpEL 条件为真或抛异常时触发，返回值原样返回。切面内部任何异常都被吞掉并记 warn，绝不影响业务。
 
@@ -214,6 +252,7 @@ public EventFilter debugOnlyFilter() {
 - 执行层：优先级队列（drop-lowest）、指数退避 + 抖动、按渠道熔断、审计、失败落盘接口
 - 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
 - 渠道：log（默认开）、email、webhook（HMAC-SHA256 + 时间戳防重放 + 主机白名单）
+- L0：`notifyx-logback` Appender（异步有界、噪声过滤、业务主键提取、双重防自递归）
 - 自动装配：全量 `@ConditionalOnMissingBean`、零依赖启动测试（T13）、Micrometer 指标
 
 规划中（设计书后续阶段）：Redis 分布式去重/限流、MQ 总线与 consumer、MyBatis-Plus 审计落库、Admin 控制台、IM 渠道（钉钉/企微/飞书）、sms4j 适配、Logback Appender。
