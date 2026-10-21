@@ -1,0 +1,86 @@
+# 决策与刻意偏离（D-NNN）
+
+> 记录**与设计书不一致**或**设计书未覆盖**的落地决策。格式：背景 → 决策 → 理由 → 影响 → 复审条件。
+> 编号只增不改；推翻旧决策时新增条目并写 `supersedes D-00X`。
+
+---
+
+## D-001 core 使用自定义 `NotifyxOrdered`，不使用 Spring `Ordered`
+
+- **日期**：2026-10（iter-00 基线确认）
+- **状态**：生效
+- **背景**：Filter / Channel 需要排序，Spring 的 `Ordered` 是最自然的选择。但 ADR-003 要求
+  `notifyx-core` 零 Spring 依赖，且 `CoreArchitectureTest` 用 ArchUnit 强制断言。
+- **决策**：core 自定义最小排序契约 `io.github.pkyit.notifyx.core.spi.NotifyxOrdered`
+  （单方法 `int order()`，默认 0）。Spring 侧适配时再桥接，不在 core 引 Spring。
+- **理由**：违反 ADR-003 的代价是「core 被打上 Spring 烙印」——无法在非 Spring 场景复用，
+  并让 ArchUnit 铁律失效。排序契约只有 1 个方法，自研成本几乎为零。
+- **影响**：用户自定义 Filter 若已实现 Spring `Ordered`，需要在注册时适配（后续可在
+  `notifyx-spring` 加 `Ordered` → `NotifyxOrdered` 桥接，目前未做）。
+- **复审条件**：若出现第三个与排序相关的 SPI，考虑抽出独立的排序抽象。
+
+## D-002 场景解析前置，`SceneRoutingFilter` 只裁决「场景是否启用」
+
+- **日期**：2026-10（iter-00 基线确认）
+- **状态**：生效
+- **背景**：设计书 §9.2 的漏斗把「场景路由」列为第 2 级 Filter。但 `FilterContext` 需要携带
+  场景配置（模板、渠道、接收人、静默期、重试次数），否则每个 Filter 都要自己去查注册表。
+- **决策**：`NotifyPipeline` 在进入 Filter 链**之前**完成场景解析与合并（场景配置 → defaults 兜底），
+  `SceneRoutingFilter` 只回答一个问题：该场景是否 `enabled`，未配置时按默认策略放行或拒绝。
+- **理由**：Filter 链保持「无状态裁决」，场景配置只解析一次，避免重复查表和语义分裂；
+  同时让用户在 900+ 区插入的 Filter 能直接读 `ctx.scene()`，不必理解注册表。
+- **影响**：`SceneRoutingFilter` 的职责比设计书描述的窄；新增「场景分流到不同渠道集」类需求时，
+  应扩展场景解析器而不是往这个 Filter 里塞逻辑。
+- **复审条件**：出现「同一场景按参数路由到不同渠道」的需求时重新设计（预计 P2 之后）。
+
+## D-003 失败落盘当前是有界内存实现
+
+- **日期**：2026-10（iter-00 基线确认）
+- **状态**：临时（P1 后续补齐）
+- **背景**：§9.9 要求失败落盘 + 补偿。P0 的验收不涉及落盘介质。
+- **决策**：`FailureStore` SPI 已定稿，默认实现 `InMemoryFailureStore`（有界、淘汰最旧）。
+  local-file / JDBC 实现推迟到 P1 后续。
+- **理由**：先固定 SPI 形状与调用点（失败时写、启动时可重放），介质实现可以后补而不改调用方。
+- **影响**：**进程重启即丢失败记录**，不能作为审计凭证；README 需明确声明。
+- **复审条件**：P1 启动「失败落盘补偿」迭代时，新增 `LocalFileFailureStore` 并补重启重放测试。
+
+## D-004 渠道自动配置放在各自渠道模块
+
+- **日期**：2026-10（iter-00 基线确认）
+- **状态**：生效
+- **背景**：`notifyx-spring-boot3-autoconfigure` 集中装配最省事，但会让它直接依赖
+  jakarta.mail / 各 IM SDK，违反第 5 章「autoconfigure 不直接依赖渠道」。
+- **决策**：每个渠道模块自带 `*ChannelAutoConfiguration` + 自己的
+  `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`。
+  业务方引哪个渠道，就激活哪段装配。
+- **理由**：依赖方向 `channel-* → core`，autoconfigure 不反向依赖；用户不引渠道时
+  classpath 中根本没有对应 SDK，天然满足「零依赖可启动」（T13）。
+- **影响**：`ZeroDependencyStartupTest` 需要显式 `AutoConfigurations.of(..., LogChannelAutoConfiguration.class)`；
+  自动装配顺序由 `@AutoConfiguration` 的相对顺序保证，不依赖 import 文件顺序。
+- **复审条件**：若渠道数量超过 8 个导致 imports 文件难维护，再考虑聚合（但不得反向依赖 SDK）。
+
+## D-005 新增 `notifyx-logback` 独立模块
+
+- **日期**：2026-10-22（iter-01 设计）
+- **状态**：生效
+- **背景**：P0 要求 Logback Appender（§8.1，L0 接入），但 §5.1 模块树没有列出它。
+  可选项：塞进 `notifyx-spring`（引入 logback-classic 到 AOP 模块）或塞进 autoconfigure
+  （依赖方向错误）。
+- **决策**：新增 `notifyx-logback`，依赖 `notifyx-core` + `logback-classic`（`provided`），
+  Spring 绑定器放在同模块内并以 `@ConditionalOnClass` 守护。**不含业务依赖**。
+- **理由**：Appender 只有 L0 用户需要，独立模块让不使用它的人零成本；logback 是
+  provided，不向业务方传递日志实现版本。
+- **影响**：模块树/依赖图需同步更新（README、§5.1 待补）；`notifyx-bom` 增加条目。
+- **复审条件**：若 Appender 需要与 Spring 生命周期强绑定（例如优雅关闭时 flush），
+  再评估把它并入 `notifyx-spring`。
+
+## D-006 场景配置在装配期合并，运行期不查环境
+
+- **日期**：2026-10-22（iter-00 基线确认）
+- **状态**：生效
+- **背景**：§14.2 允许「YAML → Admin pull → 环境变量」多来源合并。
+- **决策**：P0 只在装配期把 `notifyx.scenes.*` 合并成不可变 `SceneConfig`，运行期零查表。
+  Admin pull 模型（ADR-007）落地时以「重置注册表引用」的方式热更新，不改 Filter 签名。
+- **理由**：运行期不可变让 Filter 链完全无锁，也避免配置读取成为热点。
+- **影响**：Admin 热更新前需评估注册表替换的可见性（P4）。
+- **复审条件**：P4 做 Admin 配置同步时。
