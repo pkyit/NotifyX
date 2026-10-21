@@ -229,6 +229,11 @@ notifyx:
         reset-on-success: true
     reset-scenes:           # 显式恢复：收到该场景时清零目标场景
       ORDER_CREATE_RECOVERED: [ORDER_CREATE_FAIL]
+  fallback:
+    store: memory           # memory | file（file = 落盘到 ~/.notifyx/pending，重启不丢）
+    dir: ~/.notifyx/pending # 仅 file 模式生效
+    max-files: 10000
+    max-bytes: 100MB        # 超限先删最旧 DEAD，再删最旧文件
   rate-limit:
     rules:
       - scene: ORDER_CREATE_FAIL
@@ -310,6 +315,7 @@ public EventFilter debugOnlyFilter() {
 - core：`NotifyEvent` / `Level` / `NotifyContext` / `SendResult` / 异常体系 / 指纹算法 / 模板引擎 / 内存去重与限流 / 脱敏 / ULID
 - 责任链：全局静默、场景路由、免打扰、去重（含失败释放）、场景限流、全局限流
 - 执行层：优先级队列（drop-lowest）、指数退避 + 抖动、按渠道熔断、审计、失败落盘接口
+- 失败落盘：内存（默认）/ 本地文件（按小时分片、JSON、乐观锁、磁盘上限保护，重启不丢）
 - 聚合：T0 实例内窗口聚合（被去重事件汇总成摘要；多实例需 Redis/MQ 才能跨实例，已诚实标注）
 - 升级：同场景连续 N 次（窗口内）后改走 `upgrade-to` 渠道，支持恢复场景/成功清零
 - 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
@@ -370,7 +376,7 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**131 个测试**（core 74 / spring 6 / autoconfigure 19 / logback 20 / webhook 12），CI 矩阵 JDK 17/21。
+当前基线：**139 个测试**（core 80 / spring 6 / autoconfigure 21 / logback 20 / webhook 12），CI 矩阵 JDK 17/21。
 
 ## 发布
 
