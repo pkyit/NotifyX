@@ -28,13 +28,24 @@
   与人工 Publish 需在有凭据的环境执行，本地无法闭环。
 
 ## ISSUE-003 质量门禁与 CI 缺失（§17.3 / §17.4）
-- **状态**：OPEN（计划 iter-03）
+- **状态**：CLOSED（iter-03，CI 在 Gitee 上暂不触发）
 - **现象**：仓库无 `.github/workflows/`，无 Spotless/Checkstyle/SpotBugs 配置；
   `mvn verify` 只跑单测。§17.3 要求的格式、静态分析、覆盖率门禁（core ≥ 90%）一条都没有。
-- **证据**：`Test-Path .github` → `False`；`pom.xml` 无相关插件。
+- **证据**：原 `Test-Path .github` → `False`；`pom.xml` 无相关插件。
 - **影响**：代码风格与空指针/资源泄漏类问题只能靠人眼；CI 不过即失败的承诺无法兑现。
-- **计划**：iter-03 加 Spotless（palantir-java-format 或 eclipse）+ Checkstyle 精简规则集 +
-  JaCoCo（core 90%），CI 矩阵 JDK 17/21。
+- **关闭方式**：iter-03 接入 Spotless（轻量步骤）、Checkstyle 10.26.1（0 violation）、
+  JaCoCo（ratchet 门禁）、`.github/workflows/ci.yml`（JDK 17/21）。
+- **残留**：仓库托管在 Gitee，GitHub Actions 不会自动跑；需镜像到 GitHub 或用 Gitee Go
+  执行同一条 `mvn -B -ntp verify`。覆盖率目标值见 ISSUE-013。
+
+## ISSUE-013 覆盖率未达设计目标（core 90% / 全局 80%）
+- **状态**：OPEN（P1 持续改进）
+- **现象**：iter-03 实测 core 67.7%、logback 85.2%、autoconfigure 41.7%；
+  设计书 §17.3 要求全局 ≥ 80%、core ≥ 90%。
+- **证据**：`notifyx-core/target/site/jacoco/jacoco.csv` 汇总（816/1205 行）。
+- **影响**：core 是指纹/限流/模板/熔断等隐蔽 bug 高发区，覆盖率不足会以「去重静默失效」形式暴露。
+- **计划**：优先补 `NotifyPipeline` 分支（重试/熔断/失败落盘）、漏斗 6 个 Filter 的组合行为、
+  模板引擎边界；每轮提升后同步抬 `jacoco.minimum`。
 
 ## ISSUE-004 Spring Event 桥接（L3）与 MDC 未实现（§8.4 / §15.3）
 - **状态**：OPEN（计划 iter-04）

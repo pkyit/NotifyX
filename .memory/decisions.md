@@ -132,3 +132,22 @@
   另一种做法是 hack source/javadoc 插件强制产空 jar，脆弱且难维护。
 - **影响**：starter jar 多一个 class 文件；用户依赖不变，零行为影响。
 - **复审条件**：若未来 Maven Central 允许空模块豁免，可删除标记类。
+
+## D-010 质量门禁：轻量格式检查 + 固定旧版 Checkstyle + 覆盖率 ratchet
+
+- **日期**：2026-10-22（iter-03）
+- **状态**：生效
+- **背景**：§17.3 要求格式、静态分析、覆盖率三类门禁。试点发现三个现实约束：
+  1. 全量格式化（palantir/google-java-format）会产生 6000+ 行纯机械 diff；
+  2. Checkstyle 14.x 用 Java 21 目标编译，在 JDK 17 的 Maven 下抛 `UnsupportedClassVersionError`；
+  3. 当前 core 覆盖率 52.9%，离设计目标 90% 很远。
+- **决策**：
+  - Spotless 只做**低风险步骤**：清理未使用 import、import 分组排序、去行尾空白、补文件末尾换行。
+  - Checkstyle 固定 **10.26.1**（Java 11+ 可运行），规则集只保留会引发线上事故的项。
+  - JaCoCo 采用**分模块 ratchet**：默认 40%、core 65%、logback 80%；
+    设计目标（全局 80% / core 90%）作为 ISSUE-013 的待办，而不是立刻把门禁设成达不到的值。
+  - 行尾统一 LF，并用 `.gitattributes` 固化，避免 Windows 开发机与 Linux CI 反复产生整文件 diff。
+- **理由**：门禁的价值是「拦住新增问题」，不是「一次性把历史代码翻新」。
+  先让门禁 100% 绿并可持续，再逐步抬高阈值，比设一个永远红的门禁更有效。
+- **影响**：本次 92 个文件出现 2 行左右的机械变更（EOF/import），已单独成一次提交。
+- **复审条件**：core 覆盖率到 80% 后把门禁抬到 0.80；到 90% 后抬到 0.90 并移除 ratchet 说明。

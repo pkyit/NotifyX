@@ -1,0 +1,42 @@
+name: CI
+
+# 注意：本仓库当前托管在 Gitee，GitHub Actions 不会自动执行。
+# 该文件是设计书 §17.4 要求的 CI 矩阵基线，镜像到 GitHub 后即生效；
+# 在 Gitee 上可用 Gitee Go 直接执行同一条命令：mvn -B -ntp verify
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  verify:
+    name: verify (JDK ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      # 设计书 §17.4：缺中间件不得启动失败，矩阵不做 fail-fast
+      fail-fast: false
+      matrix:
+        java: [ '17', '21' ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      # verify 阶段已包含：Spotless 格式、Checkstyle 静态规则、JaCoCo 覆盖率门禁、全部单测
+      - name: Build and verify
+        run: mvn -B -ntp verify
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report-jdk${{ matrix.java }}
+          path: '**/target/site/jacoco/'
+          if-no-files-found: ignore

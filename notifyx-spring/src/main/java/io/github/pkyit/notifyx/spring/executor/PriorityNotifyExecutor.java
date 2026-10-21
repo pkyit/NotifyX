@@ -1,9 +1,7 @@
 package io.github.pkyit.notifyx.spring.executor;
 
 import java.time.Duration;
-import java.util.Comparator;
 import java.util.Objects;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;

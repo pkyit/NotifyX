@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  NotifyX 静态规则（设计书 17.3）。
+
+  原则：只保留「不测就一定会踩」的规则。不做格式检查（交给 Spotless），
+  不做 Javadoc 完整性检查（设计书不要求全量注释），避免规则噪音淹没真问题。
+-->
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+    <property name="severity" value="warning"/>
+    <property name="fileExtensions" value="java"/>
+
+    <module name="FileTabCharacter">
+        <property name="eachLine" value="true"/>
+    </module>
+
+    <module name="TreeWalker">
+        <!-- 导入纪律：星号导入、未使用导入、重复导入 -->
+        <module name="AvoidStarImport"/>
+        <module name="UnusedImports"/>
+        <module name="RedundantImport"/>
+
+        <!-- 最容易引发线上事故的语义陷阱 -->
+        <module name="EmptyStatement"/>
+        <module name="EqualsHashCode"/>
+        <module name="MissingSwitchDefault"/>
+        <module name="StringLiteralEquality"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+        <module name="FallThrough"/>
+
+        <!-- 结构与可读性：必须带大括号，避免「多行 if 漏括号」 -->
+        <module name="NeedBraces"/>
+        <module name="LeftCurly"/>
+        <module name="RightCurly"/>
+
+        <!-- 过长方法/类只告警不失败：line limit 关掉，避免历史代码返工 -->
+        <module name="OuterTypeFilename"/>
+        <module name="OneTopLevelClass"/>
+    </module>
+</module>

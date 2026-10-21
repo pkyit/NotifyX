@@ -6,8 +6,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Micrometer 指标自动装配：只有 classpath 存在 Micrometer 且容器里有 {@link MeterRegistry} 时生效。
