@@ -45,6 +45,7 @@ public class NotifyxProperties {
     private final Spel spel = new Spel();
     private final Diagnostics diagnostics = new Diagnostics();
     private final Aggregate aggregate = new Aggregate();
+    private final Escalation escalation = new Escalation();
     private final Events events = new Events();
     private final Actuator actuator = new Actuator();
 
@@ -146,6 +147,10 @@ public class NotifyxProperties {
 
     public Aggregate getAggregate() {
         return aggregate;
+    }
+
+    public Escalation getEscalation() {
+        return escalation;
     }
 
     public Events getEvents() {
@@ -1060,6 +1065,75 @@ public class NotifyxProperties {
 
         public void setMaxEntries(int maxEntries) {
             this.maxEntries = maxEntries;
+        }
+    }
+
+    /** 升级策略配置（设计书 9.6）。 */
+    public static class Escalation {
+        private boolean enabled;
+        private final List<Rule> rules = new ArrayList<>();
+        /** 恢复场景 → 需要清零的目标场景列表。 */
+        private final Map<String, List<String>> resetScenes = new LinkedHashMap<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public List<Rule> getRules() {
+            return rules;
+        }
+
+        public Map<String, List<String>> getResetScenes() {
+            return resetScenes;
+        }
+
+        /** 单条升级规则。 */
+        public static class Rule {
+            private String scene;
+            private int consecutive = 5;
+            private Duration within = Duration.ofMinutes(10);
+            private final List<String> upgradeTo = new ArrayList<>();
+            private boolean resetOnSuccess = true;
+
+            public String getScene() {
+                return scene;
+            }
+
+            public void setScene(String scene) {
+                this.scene = scene;
+            }
+
+            public int getConsecutive() {
+                return consecutive;
+            }
+
+            public void setConsecutive(int consecutive) {
+                this.consecutive = consecutive;
+            }
+
+            public Duration getWithin() {
+                return within;
+            }
+
+            public void setWithin(Duration within) {
+                this.within = within;
+            }
+
+            public List<String> getUpgradeTo() {
+                return upgradeTo;
+            }
+
+            public boolean isResetOnSuccess() {
+                return resetOnSuccess;
+            }
+
+            public void setResetOnSuccess(boolean resetOnSuccess) {
+                this.resetOnSuccess = resetOnSuccess;
+            }
         }
     }
 }

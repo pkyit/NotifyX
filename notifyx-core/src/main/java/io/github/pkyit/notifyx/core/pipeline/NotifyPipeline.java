@@ -70,6 +70,7 @@ public final class NotifyPipeline {
     private final CircuitConfig circuitConfig;
     private final TraceContext traceContext;
     private final Aggregator aggregator;
+    private final EscalationPolicy escalation;
 
     /**
      * {@link DedupeStore} 持有者，便于失败时释放。
@@ -98,6 +99,7 @@ public final class NotifyPipeline {
         this.circuitConfig = builder.circuitConfig;
         this.traceContext = builder.traceContext == null ? TraceContext.none() : builder.traceContext;
         this.aggregator = builder.aggregator;
+        this.escalation = builder.escalation;
     }
 
     /**
@@ -120,6 +122,7 @@ public final class NotifyPipeline {
             metrics.eventReceived(event, "L4");
             SceneConfig scene = sceneRegistry.find(event.scene());
             Level level = event.level().atLeast(scene.level()) ? event.level() : scene.level();
+            scene = applyEscalation(event, scene);
             Duration silentWindow = resolveSilentWindow(event, scene);
             Map<String, Object> renderParams = renderParams(event, level);
             String dedupeKey = resolveDedupeKey(event, renderParams);
@@ -138,10 +141,37 @@ public final class NotifyPipeline {
                 defer(event, verdict);
                 return;
             }
-            dispatch(event, scene, level, renderParams, dedupeKey);
+            boolean failed = dispatch(event, scene, level, renderParams, dedupeKey);
+            if (!failed && escalation != null) {
+                escalation.recordSuccess(event.scene());
+            }
         } catch (RuntimeException ex) {
             log.warn("notifyx pipeline failed for scene={} eventId={}: {}", event.scene(), event.eventId(), ex.toString());
         }
+    }
+
+    /**
+     * 应用升级策略：记录一次事件，必要时把通道替换为 {@code upgrade-to}。
+     *
+     * @param event 事件
+     * @param scene 原场景配置
+     * @return 生效的场景配置
+     */
+    private SceneConfig applyEscalation(NotifyEvent event, SceneConfig scene) {
+        if (escalation == null) {
+            return scene;
+        }
+        if (escalation.isRecoveryScene(event.scene())) {
+            List<String> recovered = escalation.recover(event.scene());
+            log.info("notifyx escalation reset by recovery scene={} targets={}", event.scene(), recovered);
+            return scene;
+        }
+        EscalationPolicy.Outcome outcome = escalation.record(event.scene(), System.currentTimeMillis());
+        if (!outcome.escalated()) {
+            return scene;
+        }
+        log.debug("notifyx escalation active scene={} channels={}", event.scene(), outcome.channels());
+        return scene.withRouting(scene.level(), outcome.channels());
     }
 
     private FilterVerdict runFilters(NotifyEvent event, FilterContext context) {
@@ -163,13 +193,13 @@ public final class NotifyPipeline {
         return FilterVerdict.pass();
     }
 
-    private void dispatch(NotifyEvent event, SceneConfig scene, Level level,
-                          Map<String, Object> renderParams, String dedupeKey) {
+    private boolean dispatch(NotifyEvent event, SceneConfig scene, Level level,
+                             Map<String, Object> renderParams, String dedupeKey) {
         List<String> receivers = resolveReceivers(event, scene);
         List<NotifyChannel> channels = resolveChannels(scene);
         if (channels.isEmpty()) {
             log.debug("no channel available for scene={}", event.scene());
-            return;
+            return true;
         }
         boolean failed = false;
         for (NotifyChannel channel : channels) {
@@ -186,6 +216,7 @@ public final class NotifyPipeline {
         if (failed && dedupe != null && dedupe.store() != null) {
             dedupe.store().release(dedupeKey);
         }
+        return failed;
     }
 
     private boolean sendOne(NotifyChannel channel, NotifyEvent event, Map<String, Object> renderParams,
@@ -514,6 +545,7 @@ public final class NotifyPipeline {
         private CircuitConfig circuitConfig = CircuitConfig.defaults();
         private TraceContext traceContext = TraceContext.none();
         private Aggregator aggregator;
+        private EscalationPolicy escalation;
 
         private Builder() {
         }
@@ -612,6 +644,17 @@ public final class NotifyPipeline {
          */
         public Builder aggregator(Aggregator aggregator) {
             this.aggregator = aggregator;
+            return this;
+        }
+
+        /**
+         * 升级策略；null 表示不升级。
+         *
+         * @param escalation 升级策略
+         * @return 构建器
+         */
+        public Builder escalation(EscalationPolicy escalation) {
+            this.escalation = escalation;
             return this;
         }
 

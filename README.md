@@ -219,6 +219,16 @@ notifyx:
     enabled: false          # T0 实例内聚合：窗口内被去重的事件汇总成一条摘要
     window: 10s
     max-entries: 10000
+  escalation:
+    enabled: false          # 连续 N 次未恢复后改走更高触达渠道
+    rules:
+      - scene: ORDER_CREATE_FAIL
+        consecutive: 5
+        within: 10m
+        upgrade-to: [sms, webhook]
+        reset-on-success: true
+    reset-scenes:           # 显式恢复：收到该场景时清零目标场景
+      ORDER_CREATE_RECOVERED: [ORDER_CREATE_FAIL]
   rate-limit:
     rules:
       - scene: ORDER_CREATE_FAIL
@@ -301,6 +311,7 @@ public EventFilter debugOnlyFilter() {
 - 责任链：全局静默、场景路由、免打扰、去重（含失败释放）、场景限流、全局限流
 - 执行层：优先级队列（drop-lowest）、指数退避 + 抖动、按渠道熔断、审计、失败落盘接口
 - 聚合：T0 实例内窗口聚合（被去重事件汇总成摘要；多实例需 Redis/MQ 才能跨实例，已诚实标注）
+- 升级：同场景连续 N 次（窗口内）后改走 `upgrade-to` 渠道，支持恢复场景/成功清零
 - 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
 - L3：Spring Event 桥接（`@NotifyxScene` 注解 / 配置映射，`params.__source` 可追溯）
 - Trace：MDC 里的 `traceId`/`spanId` 自动进入模板、渠道上下文与审计（Micrometer / SkyWalking 均可）
@@ -359,7 +370,7 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**123 个测试**（core 66 / spring 6 / autoconfigure 19 / logback 20 / webhook 12），CI 矩阵 JDK 17/21。
+当前基线：**131 个测试**（core 74 / spring 6 / autoconfigure 19 / logback 20 / webhook 12），CI 矩阵 JDK 17/21。
 
 ## 发布
 
