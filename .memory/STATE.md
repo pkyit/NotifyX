@@ -1,15 +1,15 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-07 完成：ADR-001 alias artifact）
+> 更新时间：2026-10-22（iter-08 完成：T0 实例内聚合）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 12 个模块，118 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 12 个模块，123 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
-优雅关闭、actuator health、启动诊断表、双 starter 坐标都已就绪。
-**P0 代码工作全部完成**（实际 deploy 需外部凭据）；P1 的聚合、升级、失败落盘补偿在排队。
+优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合都已就绪。
+**P0 代码工作全部完成**（实际 deploy 需外部凭据）；P1 剩升级、失败落盘补偿。
 
 ## 2. 已实现（按设计书章节）
 
@@ -45,7 +45,8 @@
 
 - [x] 优雅关闭（§9.10）—— iter-05（SmartLifecycle 排空 + 渠道释放；未排空落盘待 D-003）
 - [x] actuator `HealthIndicator`（§15.2）+ 启动诊断表（§14.4）—— iter-05（含 E2E）
-- [ ] 聚合（§9.5）、升级（§9.6）
+- [x] 聚合（§9.5，T0 实例内）—— iter-08（默认关闭；跨实例 T1/T2 待 P2 存储/MQ）
+- [ ] 升级（§9.6）—— 下一轮
 - [ ] 失败落盘补偿（文件 / JDBC 实现）
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
 
@@ -70,13 +71,15 @@ sms4j 适配。
 | D-011 | 模板配置用 identity PlaceholdersResolver 的 Binder 读取 | Spring 会把 `${userName}` 当环境变量解析成 `admin`，模板占位符必须与框架占位符隔离 |
 | D-012 | 优雅关闭 phase 晚于 Web 优雅停机 | 先停新流量再排空通知，关闭窗口丢事件最少；仍早于数据源销毁 |
 | D-013 | alias 坐标用 relocation + 依赖壳 + 标记类 | 同时满足 ADR-001 与 §19.2；标记类解决 Central 对空 jar 的 sources/javadoc 校验 |
+| D-014 | 聚合先做 T0 实例内且默认关闭 | 没有 Redis/MQ 时跨实例聚合是错误承诺；行为变化类能力默认关 |
 
 ## 5. 下一步队列
 
-1. **P1 继续**：聚合（§9.5）、升级（§9.6）、失败落盘补偿（D-003）。
-2. **测试债**：email 渠道契约测试（ISSUE-010）；ISSUE-013 覆盖率抬升（core 67.7% → 90%、spring 21.6% → 60%+）。
-3. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
+1. **iter-09**：升级策略（§9.6，按场景连续次数升级级别/渠道）。
+2. **P1 收尾**：失败落盘补偿（D-003，local-file 优先）。
+3. **测试债**：email 渠道契约测试（ISSUE-010）；ISSUE-013 覆盖率抬升（core 67.7% → 90%、spring 21.6% → 60%+）。
+4. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-07 合并后）。工作分支命名见 README。
+`master`（iter-08 合并后）。工作分支命名见 README。

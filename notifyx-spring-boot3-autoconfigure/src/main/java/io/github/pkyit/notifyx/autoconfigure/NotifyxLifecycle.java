@@ -37,6 +37,7 @@ public final class NotifyxLifecycle implements SmartLifecycle {
     private final NotifyTaskExecutor executor;
     private final List<NotifyChannel> channels;
     private final Duration shutdownAwait;
+    private final AutoCloseable aggregator;
     private final AtomicBoolean running = new AtomicBoolean();
 
     /**
@@ -47,9 +48,23 @@ public final class NotifyxLifecycle implements SmartLifecycle {
      * @param shutdownAwait 排空等待时长
      */
     public NotifyxLifecycle(NotifyTaskExecutor executor, List<NotifyChannel> channels, Duration shutdownAwait) {
+        this(executor, channels, shutdownAwait, null);
+    }
+
+    /**
+     * 构造生命周期。
+     *
+     * @param executor 执行器
+     * @param channels 渠道
+     * @param shutdownAwait 排空等待时长
+     * @param aggregator 聚合器（关闭时先汇总再停渠道），可为 null
+     */
+    public NotifyxLifecycle(NotifyTaskExecutor executor, List<NotifyChannel> channels, Duration shutdownAwait,
+                            AutoCloseable aggregator) {
         this.executor = executor;
         this.channels = List.copyOf(channels);
         this.shutdownAwait = shutdownAwait == null ? Duration.ofSeconds(10) : shutdownAwait;
+        this.aggregator = aggregator;
     }
 
     @Override
@@ -77,6 +92,14 @@ public final class NotifyxLifecycle implements SmartLifecycle {
             }
         } catch (Exception ex) {
             log.warn("notifyx executor shutdown failed: {}", ex.toString());
+        }
+        if (aggregator != null) {
+            try {
+                // 先汇总剩余聚合桶：此时渠道还没关闭，摘要仍能发出去
+                aggregator.close();
+            } catch (Exception ex) {
+                log.warn("notifyx aggregator close failed: {}", ex.toString());
+            }
         }
         for (NotifyChannel channel : channels) {
             try {
