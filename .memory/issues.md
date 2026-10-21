@@ -50,8 +50,9 @@
   - iter-10：core 约 72%（文件存储测试）；
   - iter-11：email 79%（门禁 75%）；
   - iter-12：spring 21.6% → 61.8%（切面/SpEL 测试），门禁 20% → 60%；
-  - iter-13：spring 92.2%（优先级执行器测试，门禁 90%）、autoconfigure 62.1%（指标测试，门禁 60%）。
-- **仍缺**：core 目标 90%（当前约 72%，主要差 `NotifyPipeline` 重试/熔断分支与 `NotifyEvent` 边界）；
+  - iter-13：spring 92.2%（优先级执行器测试，门禁 90%）、autoconfigure 62.1%（指标测试，门禁 60%）；
+  - iter-14：core 78%（管线重试/熔断 + 事件边界测试，门禁 65% → 76%）。
+- **仍缺**：core 目标 90%（剩余主要在 defer/failureStore/onSuccess 回调、NotifyContext builder）；
   autoconfigure 的分母被大量配置 POJO getter/setter 占据，已达 62.1%。
 
 ## ISSUE-004 Spring Event 桥接（L3）与 MDC 未实现（§8.4 / §15.3）
