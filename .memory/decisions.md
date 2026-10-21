@@ -183,3 +183,19 @@
 - **理由**：最大限度减少「关闭过程中丢通知」的窗口；与 §9.10 的核心目的（依赖仍可用时排空）一致。
 - **影响**：如果部署方自行调整 Web 优雅停机 phase，需要重新评估本值。
 - **复审条件**：失败落盘文件实现后，补充「关闭时未排空事件落盘」并重估 phase。
+
+## D-013 alias 坐标用 relocation + 依赖壳 + 标记类
+
+- **日期**：2026-10-22（iter-07）
+- **状态**：生效
+- **背景**：ADR-001 要求主坐标 `notifyx-spring-boot-starter` + alias `notifyx-spring-boot3-starter`，
+  并说 alias 的 POM 用 `<relocation>`；§19.2 又描述 alias 为「依赖壳」。两者需要合并落地，
+  且 Central 对每个 jar 强制要求 sources/javadoc。
+- **决策**：
+  1. 原 `-boot3-` 模块 `git mv` 为主坐标，业务依赖全部切到主坐标；
+  2. 新建 `-boot3-` alias 模块：`<relocation>` 指向主坐标 + 依赖主坐标（依赖壳兜底）；
+  3. alias jar 里放一个不可实例化的标记类与 package-info，保证 sources/javadoc 有产物。
+- **理由**：relocation 是给用户「静默迁移提示」的正确机制；依赖壳保证 relocation 在某些
+  构建工具/镜像仓库不生效时仍能拿到实现；标记类是对 Central 发布校验的最小妥协（同 D-009）。
+- **影响**：模块数 11 → 12；发布物多一个坐标；README 必须首屏解释「引哪个」。
+- **复审条件**：Boot 4 成为主流（>50%）时评估废弃 alias（ADR-001 的复评条件）。

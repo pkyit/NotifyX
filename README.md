@@ -24,7 +24,7 @@ NotifyX 把「发送」收口成一条固定责任链：**场景路由 → 免�
 ```xml
 <dependency>
     <groupId>io.github.pkyit</groupId>
-    <artifactId>notifyx-spring-boot3-starter</artifactId>
+    <artifactId>notifyx-spring-boot-starter</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
 <dependency>
@@ -33,6 +33,10 @@ NotifyX 把「发送」收口成一条固定责任链：**场景路由 → 免�
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
+
+> 坐标说明（ADR-001）：主坐标是 `notifyx-spring-boot-starter`。
+> `notifyx-spring-boot3-starter` 作为 alias 保留，POM 里带 `<relocation>`，
+> 老项目不用改也能拿到迁移提示。新项目请直接用主坐标。
 
 **2. 配 3 行 YAML**
 
@@ -110,7 +114,8 @@ public class OrderService {
 | `notifyx-core` | 模型 / SPI / 指纹 / 限流 / 模板 / 脱敏 | **仅 SLF4J**，ArchUnit 强制 |
 | `notifyx-spring` | AOP 注解、SpEL、优先级队列 | core + spring |
 | `notifyx-spring-boot3-autoconfigure` | 自动装配、配置属性、诊断 | 不直接依赖任何渠道 |
-| `notifyx-spring-boot3-starter` | 业务方唯一依赖 | 空聚合 |
+| `notifyx-spring-boot-starter` | 业务方唯一依赖（主坐标） | 空聚合 |
+| `notifyx-spring-boot3-starter` | 归档 alias，`<relocation>` 指向主坐标 | 依赖壳 |
 | `notifyx-channel-log` | 兜底日志渠道 | core |
 | `notifyx-channel-email` | Jakarta Mail | core + jakarta.mail |
 | `notifyx-channel-webhook` | 通用 HTTP + HMAC 签名 | core |
