@@ -11,6 +11,12 @@
     <artifactId>notifyx-channel-webhook</artifactId>
     <name>NotifyX Channel Webhook</name>
     <description>通用 HTTP Webhook 渠道，HMAC-SHA256 签名与防重放</description>
+
+    <properties>
+        <!-- 契约测试覆盖签名/报文/状态码分类/白名单/超时 -->
+        <jacoco.minimum>0.80</jacoco.minimum>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>

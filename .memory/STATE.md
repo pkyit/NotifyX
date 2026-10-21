@@ -1,9 +1,9 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-05 完成：优雅关闭 + Health + 启动诊断）
+> 更新时间：2026-10-22（iter-06 完成：Webhook 契约测试）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 11 个模块，106 个测试；`mvn -Prelease -Dgpg.skip=true verify` 通过，sources/javadoc 产物齐全。
+> 11 个模块，118 个测试；`mvn -Prelease -Dgpg.skip=true verify` 通过，sources/javadoc 产物齐全。
 
 ## 1. 一句话现状
 
@@ -25,7 +25,7 @@ P1 的聚合、升级、失败落盘补偿在排队。
 | §9.11 队列 | 优先级队列、软上限 drop-lowest、绝不 CallerRuns | `notifyx-spring` `PriorityNotifyExecutor` | 部分 |
 | §8.3 L2 | `@AlarmProtect` / `@NotifyOn` + SpEL（默认禁方法调用） | `notifyx-spring` | 缺 AOP 测试 |
 | §8.1 L0 | Logback Appender：异步有界、噪声过滤、bizId 提取、双重防自递归、Spring 自动绑定 | `notifyx-logback` | `NotifyxAppenderTest` 等 20 个 + E2E |
-| §10.1 渠道 | log / email / webhook（HMAC + 时间戳 + 主机白名单） | `notifyx-channel-*` | 缺契约测试 |
+| §10.1 渠道 | log / email / webhook（HMAC + 时间戳 + 主机白名单） | `notifyx-channel-*` | webhook 12 个契约测试；email 待补 |
 | §14 配置 | `NotifyxProperties` 全量属性 + 模块内渠道自动装配 + 启动诊断表 | autoconfigure / channel 模块 | `ZeroDependencyStartupTest`（T13）、`NotifyxDiagnosticsTest` |
 | §9.10 关闭 | `NotifyxLifecycle`（SmartLifecycle）：排空队列 → 关闭渠道 | autoconfigure | `NotifyxLifecycleTest` |
 | §15.1 指标 | `NotifyMetrics` + Micrometer 适配 | core / autoconfigure | 无测试 |
@@ -72,12 +72,11 @@ sms4j 适配。
 
 ## 5. 下一步队列
 
-1. **iter-06**：渠道契约测试（webhook HMAC / email），补 ISSUE-010。
-2. **P0 收尾**：ADR-001 alias artifact（依赖壳 + relocation 提示）。
-3. **P1 继续**：聚合（§9.5）、升级（§9.6）、失败落盘补偿（D-003）。
-4. **持续**：ISSUE-013 覆盖率抬升（core 67.7% → 80% → 90%；spring 21.6% → 60%+）。
-5. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
+1. **iter-07**：ADR-001 alias artifact（主坐标 + `-boot3-` 依赖壳/relocation）。
+2. **P1 继续**：聚合（§9.5）、升级（§9.6）、失败落盘补偿（D-003）。
+3. **测试债**：email 渠道契约测试（ISSUE-010）；ISSUE-013 覆盖率抬升。
+4. **待交付方**：Central 账号 + GPG 私钥 → 完成 §19.1 实际发布验证。
 
 ## 6. 当前分支
 
-`master`（iter-05 合并后）。工作分支命名见 README。
+`master`（iter-06 合并后）。工作分支命名见 README。
