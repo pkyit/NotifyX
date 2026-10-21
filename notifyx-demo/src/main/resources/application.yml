@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: notifyx-demo
+
+server:
+  port: 18080
+
+notifyx:
+  enabled: true
+  source: ${spring.application.name}
+  min-level: INFO
+  async:
+    enabled: true
+    core-pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 256
+  rate-limit:
+    enabled: true
+    max-events: 5
+    window: 30s
+  channels:
+    log:
+      enabled: true
+    webhook:
+      enabled: false
+      url: http://127.0.0.1:9999/hook
+      headers:
+        X-Alert-Token: demo-token
+
+logging:
+  level:
+    ALERT: INFO

@@ -1,0 +1,3 @@
+io.github.pkyit.notifyx.autoconfigure.AlertAutoConfiguration
+io.github.pkyit.notifyx.autoconfigure.LoggingChannelAutoConfiguration
+io.github.pkyit.notifyx.autoconfigure.WebhookChannelAutoConfiguration
