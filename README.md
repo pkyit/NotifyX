@@ -376,7 +376,7 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**170 个测试**（core 90 / spring 17 / autoconfigure 25 / email 6 / logback 20 / webhook 12），CI 矩阵 JDK 17/21。
+当前基线：**179 个测试**（core 99 / spring 17 / autoconfigure 25 / email 6 / logback 20 / webhook 12），CI 矩阵 JDK 17/21。
 
 ## 发布
 
