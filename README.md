@@ -334,7 +334,7 @@ public EventFilter debugOnlyFilter() {
 - 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
 - L3：Spring Event 桥接（`@NotifyxScene` 注解 / 配置映射，`params.__source` 可追溯）
 - Trace：MDC 里的 `traceId`/`spanId` 自动进入模板、渠道上下文与审计（Micrometer / SkyWalking 均可）
-- 渠道：log（默认开）、email、webhook（HMAC-SHA256 + 时间戳防重放 + 主机白名单）
+- 渠道：log（默认开）、email、webhook（HMAC-SHA256 + 时间戳防重放 + 主机白名单 + 嵌套 JSON；保留头不可覆盖）
 - L0：`notifyx-logback` Appender（异步有界、噪声过滤、业务主键提取、双重防自递归）
 - 可观测性：启动诊断表、`/actuator/health` 的 `notifyx` 组件（UP/DEGRADED/DOWN/OUT_OF_SERVICE）
 - 生命周期：`SmartLifecycle` 优雅关闭（先排空队列、再释放渠道），队列满/关闭均有日志与指标
@@ -535,8 +535,8 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**244 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
-store-jdbc 10 / bus-kafka 5 / bus-rabbitmq 4 / consumer 12 / email 8 / logback 20 / webhook 12），
+当前基线：**256 个测试**（core 109 / spring 17 / autoconfigure 33 / store-redis 20 /
+store-jdbc 11 / bus-kafka 5 / bus-rabbitmq 4 / consumer 12 / email 8 / logback 20 / webhook 17），
 另有 13 个 live 测试（Redis 8、JDBC 2、Kafka 1、RabbitMQ 1、邮件 1）默认跳过；
 CI 矩阵 JDK 17/21。
 
