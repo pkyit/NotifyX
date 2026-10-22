@@ -7,7 +7,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -223,6 +225,77 @@ class WebhookChannelTest {
         new WebhookChannel(properties).send(ctx);
 
         assertThat(capturedBody.get()).contains("\"receiver\":null").contains("\"tags\":{}");
+    }
+
+    @Test
+    @DisplayName("嵌套 Map / List 按 JSON 结构输出，而不是 String.valueOf")
+    void shouldRenderNestedJson() throws Exception {
+        Map<String, Object> user = new LinkedHashMap<>();
+        user.put("id", 42);
+        user.put("roles", List.of("admin", "ops"));
+        user.put("active", true);
+        NotifyEvent event = NotifyEvent.builder("SCENE_A")
+                .param("user", user)
+                .param("scores", List.of(1, 2))
+                .build();
+        NotifyContext ctx = NotifyContext.builder(event).renderedTitle("t").renderedContent("c").build();
+
+        new WebhookChannel(properties).send(ctx);
+
+        assertThat(capturedBody.get())
+                .contains("\"user\":{\"id\":42,\"roles\":[\"admin\",\"ops\"],\"active\":true}")
+                .contains("\"scores\":[1,2]");
+    }
+
+    @Test
+    @DisplayName("业务自定义 header 不能覆盖框架保留 header")
+    void shouldNotAllowReservedHeaderOverride() throws Exception {
+        properties.getHeaders().put("Content-Type", "text/plain");
+        properties.getHeaders().put("X-Notifyx-Signature", "forged");
+        properties.getHeaders().put("X-Notifyx-Event-Id", "forged");
+        properties.getHeaders().put("X-Tenant", "acme");
+        NotifyContext ctx = context();
+
+        new WebhookChannel(properties).send(ctx);
+
+        Headers headers = capturedHeaders.get();
+        assertThat(headers.getFirst("Content-Type")).isEqualTo("application/json; charset=utf-8");
+        assertThat(headers.getFirst("X-Notifyx-Event-Id")).isEqualTo(ctx.event().eventId());
+        assertThat(headers.getFirst("X-Tenant")).isEqualTo("acme");
+        String timestamp = headers.getFirst("X-Notifyx-Timestamp");
+        assertThat(headers.getFirst("X-Notifyx-Signature"))
+                .isEqualTo("sha256=" + hmacHex(timestamp + "." + capturedBody.get(), SECRET))
+                .isNotEqualTo("forged");
+    }
+
+    @Test
+    @DisplayName("非法 URL → ChannelProtocolException，而不是 IllegalArgumentException")
+    void shouldRejectMalformedUrl() {
+        properties.setUrl("http://exa mple.com/hook");
+
+        assertThatThrownBy(() -> new WebhookChannel(properties).send(context()))
+                .isInstanceOf(ChannelProtocolException.class)
+                .hasMessageContaining("invalid webhook url");
+    }
+
+    @Test
+    @DisplayName("非 http/https scheme → ChannelProtocolException")
+    void shouldRejectUnsupportedScheme() {
+        properties.setUrl("file:///tmp/hook");
+
+        assertThatThrownBy(() -> new WebhookChannel(properties).send(context()))
+                .isInstanceOf(ChannelProtocolException.class)
+                .hasMessageContaining("unsupported webhook scheme");
+    }
+
+    @Test
+    @DisplayName("非法 header 值 → ChannelProtocolException，而不是 IllegalArgumentException")
+    void shouldRejectMalformedHeader() {
+        properties.getHeaders().put("X-Bad", "line1\nline2");
+
+        assertThatThrownBy(() -> new WebhookChannel(properties).send(context()))
+                .isInstanceOf(ChannelProtocolException.class)
+                .hasMessageContaining("invalid webhook request");
     }
 
     private NotifyContext context() {

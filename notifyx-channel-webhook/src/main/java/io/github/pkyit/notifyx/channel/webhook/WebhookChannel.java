@@ -1,6 +1,7 @@
 package io.github.pkyit.notifyx.channel.webhook;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -8,7 +9,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 
 import javax.crypto.Mac;
@@ -39,6 +42,11 @@ public class WebhookChannel implements NotifyChannel {
 
     private static final String USER_AGENT = "NotifyX/1.0";
 
+    private static final Set<String> RESERVED_HEADERS = Set.of(
+            "content-type", "user-agent", "host", "content-length", "connection", "transfer-encoding",
+            "x-notifyx-event-id", "x-notifyx-delivery-attempt", "x-notifyx-timestamp",
+            "x-notifyx-idempotency-key", "x-notifyx-signature");
+
     private final WebhookChannelProperties properties;
     private final HttpClient client;
 
@@ -65,24 +73,35 @@ public class WebhookChannel implements NotifyChannel {
         long started = System.nanoTime();
         String body = payload(ctx);
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
-        HttpRequest.Builder request = HttpRequest.newBuilder()
-                .uri(verifyUri(properties.getUrl()))
-                .timeout(properties.getReadTimeout())
-                .header("Content-Type", "application/json; charset=utf-8")
-                .header("User-Agent", USER_AGENT)
-                .header("X-Notifyx-Event-Id", ctx.event().eventId())
-                .header("X-Notifyx-Delivery-Attempt", String.valueOf(ctx.attempt()))
-                .header("X-Notifyx-Timestamp", timestamp)
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-        if (ctx.idempotencyKey() != null) {
-            request.header("X-Notifyx-Idempotency-Key", ctx.idempotencyKey());
-        }
-        if (properties.isSignEnabled() && properties.getSecret() != null) {
-            request.header("X-Notifyx-Signature", "sha256=" + sign(timestamp + "." + body, properties.getSecret()));
-        }
-        properties.getHeaders().forEach(request::header);
+        HttpRequest request;
         try {
-            HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(verifyUri(properties.getUrl()))
+                    .timeout(properties.getReadTimeout())
+                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+            properties.getHeaders().forEach((name, value) -> {
+                if (name != null && value != null && !isReservedHeader(name)) {
+                    builder.header(name, value);
+                }
+            });
+            builder.header("Content-Type", "application/json; charset=utf-8")
+                    .header("User-Agent", USER_AGENT)
+                    .header("X-Notifyx-Event-Id", ctx.event().eventId())
+                    .header("X-Notifyx-Delivery-Attempt", String.valueOf(ctx.attempt()))
+                    .header("X-Notifyx-Timestamp", timestamp);
+            if (ctx.idempotencyKey() != null) {
+                builder.header("X-Notifyx-Idempotency-Key", ctx.idempotencyKey());
+            }
+            if (properties.isSignEnabled() && properties.getSecret() != null) {
+                builder.header("X-Notifyx-Signature",
+                        "sha256=" + sign(timestamp + "." + body, properties.getSecret()));
+            }
+            request = builder.build();
+        } catch (IllegalArgumentException ex) {
+            throw new ChannelProtocolException(NAME, "invalid webhook request: " + ex.getMessage(), ex);
+        }
+        try {
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             Duration cost = Duration.ofNanos(System.nanoTime() - started);
             return classify(response, cost);
         } catch (java.net.http.HttpTimeoutException ex) {
@@ -92,6 +111,8 @@ public class WebhookChannel implements NotifyChannel {
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new ChannelException(NAME, "interrupted while sending webhook", ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ChannelProtocolException(NAME, "invalid webhook request: " + ex.getMessage(), ex);
         }
     }
 
@@ -113,11 +134,30 @@ public class WebhookChannel implements NotifyChannel {
         if (rawUrl == null || rawUrl.isBlank()) {
             throw new ChannelProtocolException(NAME, "notifyx.channels.webhook.url is blank");
         }
-        URI uri = URI.create(rawUrl);
-        if (!properties.getAllowedHosts().isEmpty() && !properties.getAllowedHosts().contains(uri.getHost())) {
-            throw new ChannelProtocolException(NAME, "host not in allow-list: " + uri.getHost());
+        URI uri;
+        try {
+            uri = URI.create(rawUrl);
+        } catch (IllegalArgumentException ex) {
+            throw new ChannelProtocolException(NAME, "invalid webhook url", ex);
+        }
+        String scheme = uri.getScheme();
+        if (scheme == null || (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https"))) {
+            throw new ChannelProtocolException(NAME, "unsupported webhook scheme: " + scheme);
+        }
+        String host = uri.getHost();
+        if (host == null) {
+            throw new ChannelProtocolException(NAME, "webhook url has no host");
+        }
+        if (!properties.getAllowedHosts().isEmpty()
+                && properties.getAllowedHosts().stream().noneMatch(allowed -> allowed != null
+                        && allowed.equalsIgnoreCase(host))) {
+            throw new ChannelProtocolException(NAME, "host not in allow-list: " + host);
         }
         return uri;
+    }
+
+    private static boolean isReservedHeader(String name) {
+        return RESERVED_HEADERS.contains(name.toLowerCase(Locale.ROOT));
     }
 
     private String payload(NotifyContext ctx) {
@@ -137,17 +177,46 @@ public class WebhookChannel implements NotifyChannel {
     }
 
     private static StringBuilder field(StringBuilder builder, String name, String value) {
-        builder.append('"').append(name).append("\":").append(jsonValue(value));
+        builder.append('"').append(name).append("\":").append(quote(value));
         return builder;
     }
 
     private static String jsonMap(Map<?, ?> map) {
         StringJoiner joiner = new StringJoiner(",", "{", "}");
-        map.forEach((key, value) -> joiner.add(jsonValue(String.valueOf(key)) + ":" + jsonValue(String.valueOf(value))));
+        map.forEach((key, value) -> joiner.add(quote(String.valueOf(key)) + ":" + jsonValue(value)));
         return joiner.toString();
     }
 
-    private static String jsonValue(String value) {
+    private static String jsonValue(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        if (value instanceof String text) {
+            return quote(text);
+        }
+        if (value instanceof Number || value instanceof Boolean) {
+            return value.toString();
+        }
+        if (value instanceof Map<?, ?> map) {
+            return jsonMap(map);
+        }
+        if (value instanceof Iterable<?> iterable) {
+            StringJoiner joiner = new StringJoiner(",", "[", "]");
+            iterable.forEach(item -> joiner.add(jsonValue(item)));
+            return joiner.toString();
+        }
+        if (value.getClass().isArray()) {
+            int length = Array.getLength(value);
+            StringJoiner joiner = new StringJoiner(",", "[", "]");
+            for (int i = 0; i < length; i++) {
+                joiner.add(jsonValue(Array.get(value, i)));
+            }
+            return joiner.toString();
+        }
+        return quote(String.valueOf(value));
+    }
+
+    private static String quote(String value) {
         if (value == null) {
             return "null";
         }
@@ -184,7 +253,7 @@ public class WebhookChannel implements NotifyChannel {
             }
             return hex.toString();
         } catch (Exception ex) {
-            throw new IllegalStateException("HmacSHA256 unavailable", ex);
+            throw new ChannelProtocolException(NAME, "HmacSHA256 unavailable", ex);
         }
     }
 

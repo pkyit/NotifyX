@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-32：管线/存储可靠性修复）
+> 更新时间：2026-10-22（iter-33：Webhook 契约修复）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，251 测试执行 + 13 live 跳过（共 264 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，256 测试执行 + 13 live 跳过（共 269 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -13,7 +13,8 @@
 **全部完成**。P0/P1 SDK 范围已收口（见 iter-17 审计）；**真实 163 SMTP 邮件已实测成功且收件人确认收到**
 （iter-18/19）；**k8s 集群内邮件告警已跑通**（iter-21）；**Redis 分布式去重/限流与跨实例聚合**（iter-22/23）、
 **JDBC 审计/补偿**（iter-24/30）、**Kafka/RabbitMQ 总线与双传输 consumer**（iter-25~29）均已落地并用真实中间件验证。
-iter-32 又修复了 5 个可靠性缺陷（渠道异常隔离、自定义 Filter 装配、保留期删除空转、嵌套脱敏、限流计数）。
+iter-32 修复了 5 个可靠性缺陷（渠道异常隔离、自定义 Filter 装配、保留期删除空转、嵌套脱敏、限流计数）；
+iter-33 修复了 Webhook 嵌套 JSON、保留头覆盖与异常分类。
 Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
 
 ## 2. 已实现（按设计书章节）
@@ -69,6 +70,7 @@ Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续�
 - [x] **RabbitMQ consumer（§11.4）** —— iter-29（transport=kafka|rabbitmq 切换，真实 RabbitMQ 重复投递只发一次）
 - [x] **审计保留期清理（§12.3）** —— iter-30（`JdbcAuditRetention` 分批删除，API 不内置调度）
 - [x] **可靠性缺陷修复** —— iter-32（渠道异常隔离、自定义 Filter 装配、保留期删除空转、嵌套脱敏、限流计数）
+- [x] **Webhook 契约修复** —— iter-33（嵌套 JSON、保留头不可覆盖、异常统一分类、scheme/host 校验）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -108,7 +110,7 @@ sms4j 适配。
 ## 5. 下一步队列
 
 1. **待用户决策**：A02/A03（目标级失败记录 + 定向重投，修多渠道路由覆盖与部分成功重复发送）、
-   A04（无渠道返回 `NO_ROUTE` 而非成功）、A07（审计/落盘全链路脱敏）、A09（Webhook 嵌套 JSON 与保留头）。
+   A04（无渠道返回 `NO_ROUTE` 而非成功）、A07（审计/落盘全链路脱敏）。
 2. **P2+ 扩展**：RabbitMQ DLX/多级 TTL、consumer 多实例分区与死信重试、信创 DDL
    （DM/Kingbase/openGauss）与 `nx_idempotency` 保留期、Admin 控制台（P4）。
 3. **k8s 生产化**：自有镜像仓库 + Deployment + Secret 注入。
@@ -117,5 +119,5 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-31 合并后；iter-32 在 `bugfix/iter-32-reliability` 完成后合并）。
+`master`（iter-32 已合并；iter-33 在 `bugfix/iter-33-webhook-contract` 完成后合并）。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。

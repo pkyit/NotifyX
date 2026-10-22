@@ -234,3 +234,15 @@
   指标/诊断会看到已经过期的计数。
 - **证据**：`MemoryRateLimiterTest.currentCountShouldPruneExpired`；修复前窗口滑过后仍返回 1。
 - **关闭方式**：`currentCount` 在 `computeIfPresent` 中清理过期元素，空 deque 移除 key。
+
+## ISSUE-025 Webhook 嵌套参数被字符串化、保留头可覆盖、异常未分类
+- **状态**：CLOSED（iter-33）
+- **现象**：
+  1. `jsonMap()` 对所有 value 执行 `String.valueOf()`，嵌套 Map/List 变成 `"{id=42}"` 字符串，
+     不是合法 JSON object/array；
+  2. 用户 `headers` 在框架头之后设置，可覆盖 `Content-Type`、`X-Notifyx-Signature`、幂等键；
+  3. `URI.create()` / `HttpRequest.Builder.header()` 的 `IllegalArgumentException` 直接外抛，
+     `sign()` 的 HMAC 失败抛 `IllegalStateException`，均未进入 `ChannelException` 体系。
+- **证据**：`WebhookChannelTest` 新增 5 个用例；修复前嵌套参数断言失败、签名头可被 `forged` 覆盖。
+- **关闭方式**：递归 JSON 序列化；保留头先过滤后写；URL 只允许 http/https 并做 host 校验；
+  URI/header/HMAC 异常统一转 `ChannelProtocolException`。
