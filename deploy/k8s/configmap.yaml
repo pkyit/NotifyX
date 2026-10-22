@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notifyx-sample-config
+  namespace: notifyx-demo
+  labels:
+    app.kubernetes.io/name: notifyx-sample
+data:
+  # 覆盖 classpath 里的 application.yml；凭据由 Secret 注入环境变量后占位解析
+  application.yml: |
+    server:
+      port: 8080
+      shutdown: graceful
+
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info
+
+    notifyx:
+      enabled: true
+      env: k8s
+      tenant: sample
+      channels:
+        email:
+          enabled: true
+          host: smtp.163.com
+          port: 465
+          ssl: true
+          username: ${NOTIFYX_SMTP_USER}
+          password: ${NOTIFYX_SMTP_PASS}
+          from: ${NOTIFYX_SMTP_USER}
+          from-name: NotifyX K8s
+      scenes:
+        ORDER_CREATE_FAIL:
+          level: ERROR
+          channels: [email]
+          template: k8s-order-fail
+          receivers: [pky1999@qq.com, pkyit@qq.com]
+          silent-window: 0s
+      templates:
+        templates:
+          k8s-order-fail:
+            title: "【K8s 邮件告警】${bizId}"
+            content: |
+              这是在 Kubernetes 集群中由 NotifyX 发出的测试邮件。
+              订单：${bizId}
+              原因：${reason}
+              实例：${instanceId}
+              时间：${occurredAt}
