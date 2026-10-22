@@ -356,6 +356,20 @@ public EventFilter debugOnlyFilter() {
 - 关闭时 `NotifyxLifecycle` 在 `notifyx.async.shutdown-await`（默认 10s）内排空队列，再关闭渠道；
   K8s 的 `terminationGracePeriodSeconds` 必须大于该值（建议 30s）。
 
+## 真实邮件冒烟（可选）
+
+`EmailLiveSmokeTest` 只在环境变量齐备时执行，默认跳过（CI 无凭据）。它会**真实发送邮件**：
+
+```powershell
+$env:NOTIFYX_SMTP_HOST="smtp.163.com"; $env:NOTIFYX_SMTP_PORT="465"; $env:NOTIFYX_SMTP_SSL="true"
+$env:NOTIFYX_SMTP_USER="you@example.com"; $env:NOTIFYX_SMTP_PASS="<授权码>"
+$env:NOTIFYX_SMTP_TO="a@example.com,b@example.com"
+mvn -B -pl notifyx-channel-email test -Dtest=EmailLiveSmokeTest
+```
+
+输出 `LIVE_EMAIL <收件人> status=SUCCESS messageId=...` 即表示 SMTP 认证、TLS 与投递均正常。
+凭据只从环境变量读取，不会进入仓库或日志。
+
 ## 兼容性
 
 | NotifyX | Boot 3.5（基线） | Boot 4 | JDK 17 | JDK 21 |
@@ -382,7 +396,8 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**188 个测试**（core 99 / spring 17 / autoconfigure 32 / email 8 / logback 20 / webhook 12），CI 矩阵 JDK 17/21。
+当前基线：**190 个测试**（core 101 / spring 17 / autoconfigure 32 / email 8 / logback 20 / webhook 12），
+另有 1 个真实邮件冒烟测试默认跳过；CI 矩阵 JDK 17/21。
 
 ## 发布
 

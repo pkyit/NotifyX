@@ -1,16 +1,16 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-18：真实 SMTP 联通 + EmailChannel 认证修复）
+> 更新时间：2026-10-22（iter-20：审计级别修复）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 12 个模块，188 个测试；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 12 个模块，190 个测试（另有 1 个 live 冒烟默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
 优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级、失败落盘与自动补偿
-**全部完成**。P0/P1 SDK 范围已收口（见 iter-17 审计）；**真实 163 SMTP 邮件已实测成功**（iter-18）。
-Maven Central 发布**不在要求内**；P2 起（Redis/JDBC/MQ/Admin/IM）按需推进。
+**全部完成**。P0/P1 SDK 范围已收口（见 iter-17 审计）；**真实 163 SMTP 邮件已实测成功且收件人确认收到**
+（iter-18/19）。Maven Central 发布**不在要求内**；P2 起（Redis/JDBC/MQ/Admin/IM）按需推进。
 
 ## 2. 已实现（按设计书章节）
 
