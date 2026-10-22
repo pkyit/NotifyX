@@ -1,6 +1,6 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-20：审计级别修复）
+> 更新时间：2026-10-22（iter-21：K8s 邮件告警验证）
 > 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
 > 12 个模块，190 个测试（另有 1 个 live 冒烟默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
@@ -10,7 +10,8 @@
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
 优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级、失败落盘与自动补偿
 **全部完成**。P0/P1 SDK 范围已收口（见 iter-17 审计）；**真实 163 SMTP 邮件已实测成功且收件人确认收到**
-（iter-18/19）。Maven Central 发布**不在要求内**；P2 起（Redis/JDBC/MQ/Admin/IM）按需推进。
+（iter-18/19）；**k8s 集群内邮件告警已跑通**（iter-21，阿里云 JDK 镜像 + Secret/ConfigMap）。
+Maven Central 发布**不在要求内**；P2 起（Redis/JDBC/MQ/Admin/IM）按需推进。
 
 ## 2. 已实现（按设计书章节）
 
@@ -86,13 +87,13 @@ sms4j 适配。
 
 ## 5. 下一步队列
 
-1. **k8s 邮件验证**：把 sample 部署到集群（SMTP 凭据用 Secret 注入），触发 `/demo/alarm` 做集群内验证。
-2. **观察项**：命令行覆盖场景 `channels` 时审计 level 变 WARN（YAML 是 ERROR），先复现再定性。
-3. **测试债**：core 79.8% → 90%；T1–T24 剩余用例。
-4. **P2**：Redis store（跨实例去重/限流/聚合）、JDBC store（审计+补偿，信创库 DDL）。
-5. **P3/P4**：MQ 三总线 + consumer；Admin 控制台。
-6. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
+1. **k8s 生产化**：把 fat jar 打进自有镜像（`deploy/k8s/Dockerfile` 已就绪，需镜像仓库推送凭据），
+   用 Deployment 替代 `kubectl cp` 冒烟；`terminationGracePeriodSeconds` 建议 30s。
+2. **测试债**：core 79.8% → 90%；T1–T24 剩余用例。
+3. **P2**：Redis store（跨实例去重/限流/聚合）、JDBC store（审计+补偿，信创库 DDL）。
+4. **P3/P4**：MQ 三总线 + consumer；Admin 控制台。
+5. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
 
 ## 6. 当前分支
 
-`master`（iter-18 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
+`master`（iter-21 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。

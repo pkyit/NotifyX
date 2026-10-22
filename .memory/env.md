@@ -68,7 +68,18 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 | 结果 | 直连渠道两封 `SUCCESS`；sample 管线两个接收人均 `SUCCESS`（见 journal/2026-10-22） |
 | 注意 | `Transport.send(message)` 依赖 `Session` 的 `Authenticator` 提交凭据；只设 `mail.smtp.auth=true` 会 535 |
 
-## 6. CI 矩阵（§17.4）
+## 6. Kubernetes 集群（iter-21 实测）
+
+| 项 | 值 |
+| --- | --- |
+| 集群 | 3 control-plane + 3 worker，Anolis OS 8.10，containerd 1.7.29，v1.32.13 |
+| 节点 IP | 10.10.10.201~203（master）/ 10.10.10.211~213（node） |
+| 可用镜像 | `registry.aliyuncs.com/pkyit/java:jdk17-font`（公开、国内可拉取） |
+| 限制 | 国内网络拉不到 Docker Hub；没有该仓库的推送凭据，生产镜像需交付方提供仓库 |
+| 验证 | Pod 内 `kubectl cp` fat jar + `java -jar`，两条 email 审计 SUCCESS（iter-21） |
+| 清理 | 验证后 namespace `notifyx-demo` 已删除 |
+
+## 7. CI 矩阵（§17.4）
 
 `.github/workflows/ci.yml`：Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
 当前仓库托管在 Gitee，GitHub Actions 不会自动触发；Gitee Go 可直接执行 `mvn -B -ntp verify`。

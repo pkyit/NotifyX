@@ -356,6 +356,16 @@ public EventFilter debugOnlyFilter() {
 - 关闭时 `NotifyxLifecycle` 在 `notifyx.async.shutdown-await`（默认 10s）内排空队列，再关闭渠道；
   K8s 的 `terminationGracePeriodSeconds` 必须大于该值（建议 30s）。
 
+## Kubernetes 验证
+
+`deploy/k8s/` 提供了在集群内跑通邮件告警的清单与步骤（阿里云公开 JDK 镜像、Secret 注入 SMTP 凭据、
+ConfigMap 注入场景配置、`kubectl cp` 冒烟 + 生产 Dockerfile）：
+
+```bash
+mvn -B -pl notifyx-sample -am package -DskipTests
+# 详见 deploy/k8s/README.md
+```
+
 ## 真实邮件冒烟（可选）
 
 `EmailLiveSmokeTest` 只在环境变量齐备时执行，默认跳过（CI 无凭据）。它会**真实发送邮件**：
