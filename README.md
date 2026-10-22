@@ -463,6 +463,21 @@ notifyx:
 - `onSuccess/onError` 无法跨进程，MQ 模式下只 warn；
 - **consumer 服务尚未实现**（下一阶段），当前只能验证「发布 + 消费到报文」。
 
+## MQ Consumer（独立服务）
+
+`notifyx-consumer` 消费 Kafka 报文，做幂等检查后交给完整责任链：
+
+```bash
+java -jar notifyx-consumer/target/notifyx-consumer-1.0.0-SNAPSHOT.jar \
+  --spring.kafka.bootstrap-servers=127.0.0.1:9092 \
+  --notifyx.consumer.topic=notifyx-events
+```
+
+- 单实例起步（天然无重复）；多实例需按分区消费 + 持久化幂等；
+- 当前幂等为内存 TTL（`notifyx.consumer.idempotency-ttl`，默认 24h）+ 容量上限，
+  **重启会失效**；Redis/JDBC 幂等实现待补；
+- `async.enabled=false`，按分区同步处理保序；坏报文只记录并 ACK，避免毒消息卡分区。
+
 ## 真实邮件冒烟（可选）
 
 `EmailLiveSmokeTest` 只在环境变量齐备时执行，默认跳过（CI 无凭据）。它会**真实发送邮件**：
@@ -503,9 +518,9 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**226 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
-store-jdbc 8 / bus-kafka 5 / email 8 / logback 20 / webhook 12），另有 11 个 live 测试
-（Redis 7、JDBC 2、Kafka 1、邮件 1）默认跳过；CI 矩阵 JDK 17/21。
+当前基线：**232 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
+store-jdbc 8 / bus-kafka 5 / consumer 6 / email 8 / logback 20 / webhook 12），
+另有 11 个 live 测试（Redis 7、JDBC 2、Kafka 1、邮件 1）默认跳过；CI 矩阵 JDK 17/21。
 
 ## 发布
 
