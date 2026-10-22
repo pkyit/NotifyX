@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import io.github.pkyit.notifyx.core.pipeline.EventAggregator;
 import io.github.pkyit.notifyx.core.spi.DedupeStore;
 import io.github.pkyit.notifyx.core.spi.RateLimiter;
 import io.github.pkyit.notifyx.core.support.MemoryDedupeStore;
@@ -34,7 +35,7 @@ import io.github.pkyit.notifyx.core.support.MemoryRateLimiter;
 @ConditionalOnBean(StringRedisTemplate.class)
 @ConditionalOnProperty(prefix = "notifyx.store.redis", name = "enabled", havingValue = "true",
         matchIfMissing = true)
-@EnableConfigurationProperties(RedisStoreProperties.class)
+@EnableConfigurationProperties({RedisStoreProperties.class, RedisAggregationProperties.class})
 public class RedisStoresAutoConfiguration {
 
     /**
@@ -63,5 +64,23 @@ public class RedisStoresAutoConfiguration {
     public RateLimiter redisRateLimiter(StringRedisTemplate template, RedisStoreProperties properties) {
         return new FallbackRateLimiter(new RedisRateLimiter(template, properties.getKeyPrefix()),
                 new MemoryRateLimiter(), properties.getFailureThreshold(), properties.getOpenDuration());
+    }
+
+    /**
+     * 跨实例聚合（T1）：仅在 {@code notifyx.aggregate.enabled=true} 时取代 T0 聚合器。
+     *
+     * @param template Redis 模板
+     * @param storeProperties 存储配置（key 前缀）
+     * @param aggregationProperties 聚合配置
+     * @return 聚合器
+     */
+    @Bean
+    @ConditionalOnMissingBean(EventAggregator.class)
+    @ConditionalOnProperty(prefix = "notifyx.aggregate", name = "enabled", havingValue = "true")
+    public EventAggregator redisAggregator(StringRedisTemplate template, RedisStoreProperties storeProperties,
+                                           RedisAggregationProperties aggregationProperties) {
+        return new RedisAggregator(template, storeProperties.getKeyPrefix(),
+                new RedisAggregator.Config(aggregationProperties.isEnabled(), aggregationProperties.getWindow(),
+                        aggregationProperties.getMaxEntries()));
     }
 }

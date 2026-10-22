@@ -324,7 +324,8 @@ public EventFilter debugOnlyFilter() {
 - 失败落盘：内存（默认）/ 本地文件（按小时分片、JSON、乐观锁、磁盘上限保护，重启不丢）
 - T1（可选）：`notifyx-store-redis` 提供 Redis 分布式去重（SET NX EX）与滑动窗限流（Lua），
   Redis 故障自动降级内存（降级期间多实例可能重复发送）
-- 聚合：T0 实例内窗口聚合（被去重事件汇总成摘要；跨实例聚合待后续 Redis/MQ 迭代）
+- 聚合：T0 实例内窗口聚合（默认）；有 Redis 且 `notifyx.aggregate.enabled=true` 时自动切到
+  T1 跨实例聚合（Redis Hash 计数 + `SET NX` 抢锁，只有一个实例发摘要）
 - 升级：同场景连续 N 次（窗口内）后改走 `upgrade-to` 渠道，支持恢复场景/成功清零
 - 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
 - L3：Spring Event 桥接（`@NotifyxScene` 注解 / 配置映射，`params.__source` 可追溯）
@@ -444,8 +445,8 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**199 个测试**（core 101 / spring 17 / autoconfigure 32 / store-redis 9 /
-email 8 / logback 20 / webhook 12），另有 6 个 live 测试（Redis 5、邮件 1）默认跳过；
+当前基线：**210 个测试**（core 101 / spring 17 / autoconfigure 32 / store-redis 20 /
+email 8 / logback 20 / webhook 12），另有 7 个 live 测试（Redis 7、邮件 1）默认跳过；
 CI 矩阵 JDK 17/21。
 
 ## 发布

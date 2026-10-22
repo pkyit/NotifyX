@@ -31,6 +31,7 @@ import io.github.pkyit.notifyx.core.pipeline.Aggregator;
 import io.github.pkyit.notifyx.core.pipeline.ChannelRegistry;
 import io.github.pkyit.notifyx.core.pipeline.DefaultNotifyKit;
 import io.github.pkyit.notifyx.core.pipeline.EscalationPolicy;
+import io.github.pkyit.notifyx.core.pipeline.EventAggregator;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.NotifyPipeline;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
@@ -332,7 +333,7 @@ public class NotifyxAutoConfiguration {
                                       NotifyMetrics metrics,
                                       NotifyTaskExecutor taskExecutor,
                                       TraceContext traceContext,
-                                      Aggregator aggregator,
+                                      EventAggregator aggregator,
                                       EscalationPolicy escalation,
                                       Environment environment) {
         List<EventFilter> filters = buildFilters(properties, dedupeStore, rateLimiter);
@@ -375,7 +376,7 @@ public class NotifyxAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public Aggregator notifyxAggregator(NotifyxProperties properties) {
+    public EventAggregator notifyxAggregator(NotifyxProperties properties) {
         NotifyxProperties.Aggregate config = properties.getAggregate();
         return new Aggregator(new Aggregator.Config(config.isEnabled(), config.getWindow(),
                 config.getMaxEntries()));
@@ -432,7 +433,7 @@ public class NotifyxAutoConfiguration {
     public NotifyxLifecycle notifyxLifecycle(NotifyTaskExecutor taskExecutor,
                                              ObjectProvider<NotifyChannel> channels,
                                              NotifyxProperties properties,
-                                             Aggregator aggregator) {
+                                             EventAggregator aggregator) {
         return new NotifyxLifecycle(taskExecutor, channels.orderedStream().toList(),
                 properties.getAsync().getShutdownAwait(), aggregator);
     }

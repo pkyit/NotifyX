@@ -1,9 +1,9 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-22：Redis 分布式去重/限流）
-> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2 起步（Redis T1）**。**不是** 23 周后的 1.0 GA。
+> 更新时间：2026-10-22（iter-23：T1 跨实例聚合）
+> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1）**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 13 个模块，199 个测试（另有 6 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 13 个模块，210 个测试（另有 7 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -57,7 +57,7 @@
 - [x] `NotifyEnvelope` 契约 + 零依赖 JSON 编解码 —— iter-15（落盘写入可还原报文）
 - [x] 失败自动补偿 —— iter-16（CAS→重投→SENT/DEAD + 退避，默认关闭；ISSUE-015 关闭）
 - [x] **T1 Redis 去重/限流（§9.4）** —— iter-22（`notifyx-store-redis`，集群 Redis 6.2.23 实测，降级内存）
-- [ ] 跨实例聚合（§9.5 T1）
+- [x] **T1 跨实例聚合（§9.5）** —— iter-23（Redis Hash 计数 + `SET NX` 抢锁，真实 Redis 两实例只发一条）
 - [ ] JDBC store —— P2（信创库适配）
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
 
@@ -88,16 +88,16 @@ sms4j 适配。
 | D-017 | local-file 落盘用手写扁平 JSON + 容量上限，暂不做自动重投 | core 不能引 Jackson；自动补偿需先定 NotifyEnvelope 契约 |
 | D-018 | 补偿优先 `deliverSync` 真实结果，自定义 `NotifyKit` 退化为提交成功 | 不破坏 `NotifyKit` 6 方法契约；退化路径写入文档 |
 | D-019 | Redis 故障降级内存（熔断 30s）、`size=-1` 不用 KEYS、自动装配排在管线之前 | 可用性优先；多实例降级期可能重复发送，已写入 README |
+| D-020 | T1 聚合与 T0 共用开关，`SET NX` 抢锁保证全局一条摘要，不做崩溃补发 | 重复摘要比丢失更扰民；补发需额外协调机制 |
 
 ## 5. 下一步队列
 
-1. **T1 跨实例聚合**：Redis INCR/HSET + `SET NX` 抢锁，窗口结束发摘要（§9.5）。
-2. **JDBC store**：审计/补偿落库，信创库 DDL（MySQL/DM/Kingbase/openGauss）。
-3. **MQ 总线**：Kafka/RabbitMQ producer + consumer（幂等键、单消费者排序）。
-4. **k8s 生产化**：自有镜像仓库 + Deployment（`deploy/k8s/Dockerfile` 已就绪）。
-5. **测试债**：core 79.8% → 90%；T1–T24 剩余用例。
-6. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
+1. **JDBC store**：审计/补偿落库，信创库 DDL（MySQL/DM/Kingbase/openGauss）。
+2. **MQ 总线**：Kafka/RabbitMQ producer + consumer（幂等键、单消费者排序）。
+3. **k8s 生产化**：自有镜像仓库 + Deployment（`deploy/k8s/Dockerfile` 已就绪）。
+4. **测试债**：core 79.8% → 90%；T1–T24 剩余用例。
+5. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
 
 ## 6. 当前分支
 
-`master`（iter-22 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
+`master`（iter-23 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
