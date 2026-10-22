@@ -47,6 +47,7 @@
         <module>notifyx-spring-boot3-autoconfigure</module>
         <module>notifyx-store-redis</module>
         <module>notifyx-store-jdbc</module>
+        <module>notifyx-bus-kafka</module>
         <module>notifyx-spring-boot-starter</module>
         <module>notifyx-spring-boot3-starter</module>
         <module>notifyx-channel-log</module>

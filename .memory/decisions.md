@@ -328,3 +328,20 @@
 - **理由**：先把契约、乐观锁、真实库验证跑通；MyBatis-Plus 版可作为增强模块，不必现在承担耦合。
 - **影响**：没有 MP 的分页/方言自动适配；审计高写入量下的批量/保留策略需要后续补。
 - **复审条件**：需要 Admin 分页查询/多表 CRUD 时，再评估引入 `store-mybatisplus`。
+
+## D-022 MQ 模式：门面级 producer-only，幂等键用 eventId
+
+- **日期**：2026-10-22（iter-25）
+- **状态**：生效
+- **背景**：ADR-006 要求 `mode=mq` 时 SDK 只做 producer；本地 pipeline 的去重/限流/渲染
+  不应在 producer 侧执行，否则与 consumer 行为重复。
+- **决策**：
+  1. 新增 `NotifyBus` SPI 与 `MqNotifyKit`；`mode=mq` 时用 `MqNotifyKit` 替换本地门面，
+     完全绕过 pipeline、渠道与本地过滤器；
+  2. 报文 `idempotencyKey=eventId`（重投稳定），`dedupeKey=指纹`（Kafka key 保序）；
+  3. 发布失败写 `FailureStore` 兜底（envelope 完整 JSON），不向业务抛；
+  4. `onSuccess/onError` 检测后 warn，不阻断；
+  5. 本地/MQ 两个门面 Bean 用互斥的 `@ConditionalOnProperty`，避免 `@ConditionalOnMissingBean` 顺序问题。
+- **理由**：producer 只做传输，语义裁决集中在 consumer；门面替换比在 pipeline 内加分支更少侵入。
+- **影响**：MQ 模式下本地 `notifyx.filters`/场景渠道配置不生效；consumer 必须持有同一套配置。
+- **复审条件**：consumer 落地后，评估是否需要在 producer 侧保留「全局静默/紧急刹车」。

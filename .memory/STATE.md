@@ -1,9 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-24：JDBC 审计/失败补偿）
-> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）**。**不是** 23 周后的 1.0 GA。
+> 更新时间：2026-10-22（iter-25：Kafka producer / MQ 模式）
+> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3 起步（Kafka producer）**。
+> **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 14 个模块，218 个测试（另有 9 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 15 个模块，226 个测试（另有 11 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -59,7 +60,9 @@
 - [x] **T1 Redis 去重/限流（§9.4）** —— iter-22（`notifyx-store-redis`，集群 Redis 6.2.23 实测，降级内存）
 - [x] **T1 跨实例聚合（§9.5）** —— iter-23（Redis Hash 计数 + `SET NX` 抢锁，真实 Redis 两实例只发一条）
 - [x] **JDBC 审计/失败补偿（§12.2）** —— iter-24（MySQL 8.0 / PostgreSQL 16 实测；纯 JDBC，D-021）
-- [ ] MQ 总线（Kafka/RabbitMQ）与 consumer —— P3
+- [x] **Kafka producer（§11，producer-only）** —— iter-25（`notifyx-bus-kafka`，集群 Kafka 4.3.1 发布/消费实测）
+- [ ] Kafka consumer 服务（幂等 + 完整责任链 + ACK/死信）
+- [ ] RabbitMQ bus（镜像已具备）
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与审计容量治理
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
 
@@ -92,15 +95,17 @@ sms4j 适配。
 | D-019 | Redis 故障降级内存（熔断 30s）、`size=-1` 不用 KEYS、自动装配排在管线之前 | 可用性优先；多实例降级期可能重复发送，已写入 README |
 | D-020 | T1 聚合与 T0 共用开关，`SET NX` 抢锁保证全局一条摘要，不做崩溃补发 | 重复摘要比丢失更扰民；补发需额外协调机制 |
 | D-021 | JDBC 存储用纯 JDBC 而非 MyBatis-Plus | 当前只有两张表；减少版本/方言耦合，信创 DDL 独立 |
+| D-022 | MQ 模式用门面级 producer-only，幂等键用 eventId | producer 只传输，语义裁决交给 consumer；避免与本地管线重复 |
 
 ## 5. 下一步队列
 
-1. **MQ 总线**：Kafka/RabbitMQ producer + consumer（幂等键、单消费者排序）。
-2. **信创 DDL**：DM/Kingbase/openGauss 方言与 CI 冒烟；审计容量治理（retention/sampling/batch）。
-3. **k8s 生产化**：自有镜像仓库 + Deployment（`deploy/k8s/Dockerfile` 已就绪）。
-4. **测试债**：core 79.8% → 90%；T1–T24 剩余用例。
-5. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
+1. **Kafka consumer 服务**：幂等（Redis/DB/内存）+ 完整责任链 + ACK/死信。
+2. **RabbitMQ bus**：镜像 `rabbitmq:3.13.0` 已具备。
+3. **信创 DDL**：DM/Kingbase/openGauss 方言与 CI 冒烟；审计容量治理。
+4. **k8s 生产化**：自有镜像仓库 + Deployment。
+5. **测试债**：core 覆盖率提升；T1–T24 剩余用例。
+6. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
 
 ## 6. 当前分支
 
-`master`（iter-24 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
+`master`（iter-25 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。

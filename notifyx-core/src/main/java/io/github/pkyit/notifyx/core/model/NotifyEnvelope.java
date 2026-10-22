@@ -108,6 +108,25 @@ public record NotifyEnvelope(
                                     String instanceId, int attempts, long createdAt) {
         Objects.requireNonNull(event, "event");
         String idempotencyKey = dedupeKey == null || dedupeKey.isBlank() ? event.eventId() : dedupeKey;
+        return of(event, idempotencyKey, dedupeKey, traceId, spanId, instanceId, attempts, createdAt);
+    }
+
+    /**
+     * 显式指定幂等键组装报文（MQ 模式用 eventId，保证重投幂等）。
+     *
+     * @param event 事件
+     * @param idempotencyKey 幂等键
+     * @param dedupeKey 去重指纹
+     * @param traceId 链路 ID
+     * @param spanId Span ID
+     * @param instanceId 实例
+     * @param attempts 已尝试次数
+     * @param createdAt 创建时间
+     * @return 报文
+     */
+    public static NotifyEnvelope of(NotifyEvent event, String idempotencyKey, String dedupeKey, String traceId,
+                                    String spanId, String instanceId, int attempts, long createdAt) {
+        Objects.requireNonNull(event, "event");
         long silentSeconds = event.silentWindow() == null ? 0L : event.silentWindow().toSeconds();
         return new NotifyEnvelope(CURRENT_SCHEMA_VERSION, event.eventId(), idempotencyKey, dedupeKey,
                 event.scene(), event.level(), event.title(), event.params(), List.copyOf(event.receivers()),

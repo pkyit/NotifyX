@@ -435,6 +435,34 @@ spring:
   与文件/内存实现共用同一状态机。
 - 已在真实 MySQL 8.0.46 与 PostgreSQL 16.15 上跑通审计写入与失败记录 CRUD。
 
+## MQ 模式（Kafka，producer-only）
+
+`notifyx.mode=mq` 时 SDK 只负责序列化与发布，消费/去重/限流/渲染由独立 consumer 承担：
+
+```xml
+<dependency>
+  <groupId>io.github.pkyit</groupId>
+  <artifactId>notifyx-bus-kafka</artifactId>
+</dependency>
+```
+
+```yaml
+notifyx:
+  mode: mq
+  bus: kafka
+  bus:
+    kafka:
+      bootstrap-servers: 127.0.0.1:9092
+      topic: notifyx-events
+      acks: all
+      idempotence: true
+```
+
+- Kafka key = `dedupeKey`（同事件保序），value = `NotifyEnvelope` JSON（含 schemaVersion）；
+- 发布失败写入 `FailureStore` 兜底，不向业务抛异常；
+- `onSuccess/onError` 无法跨进程，MQ 模式下只 warn；
+- **consumer 服务尚未实现**（下一阶段），当前只能验证「发布 + 消费到报文」。
+
 ## 真实邮件冒烟（可选）
 
 `EmailLiveSmokeTest` 只在环境变量齐备时执行，默认跳过（CI 无凭据）。它会**真实发送邮件**：
@@ -475,9 +503,9 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**218 个测试**（core 101 / spring 17 / autoconfigure 32 / store-redis 20 /
-store-jdbc 8 / email 8 / logback 20 / webhook 12），另有 9 个 live 测试
-（Redis 7、JDBC 2、邮件 1）默认跳过；CI 矩阵 JDK 17/21。
+当前基线：**226 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
+store-jdbc 8 / bus-kafka 5 / email 8 / logback 20 / webhook 12），另有 11 个 live 测试
+（Redis 7、JDBC 2、Kafka 1、邮件 1）默认跳过；CI 矩阵 JDK 17/21。
 
 ## 发布
 
