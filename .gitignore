@@ -1,6 +1,7 @@
 target/
 *.class
 *.log
+*.log.gz
 logs/
 .idea/
 *.iml
@@ -16,3 +17,4 @@ logs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+/.workbuddy/
