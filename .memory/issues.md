@@ -160,6 +160,28 @@
   单实例扫描的 IO 放大在多实例下存在，ShedLock/MQ 单消费者属 P2/P3。
 - **关联**：D-003（部分落地）、D-017、D-018。
 
+## ISSUE-016 EmailChannel 未向 SMTP 提交凭据（真实环境暴露）
+- **状态**：CLOSED（iter-18）
+- **现象**：配置了用户名/密码，真实 163 SMTP 发送仍报 `ChannelAuthException: SMTP authentication failed`；
+  同一账号用 Python `smtplib` 登录返回 `235 Authentication successful`。
+- **根因**：只设置了 `mail.smtp.auth=true`，`Session` 没有 `Authenticator`；
+  `Transport.send(message)` 不接收 user/password，JavaMail 不会提交任何凭据。
+- **修复**：`Session.getInstance(props, authenticator(properties))`，用户名非空时提供
+  `PasswordAuthentication`；匿名中继保持不带凭据。
+- **证据**：修复后直接渠道两封 `SUCCESS`；sample 完整链路两条审计 `status=SUCCESS`。
+- **教训**：静态 mock `Transport.send` 的契约测试覆盖不到 SMTP 协议交互；认证类配置必须有
+  「Session/Authenticator」层面的断言，或定期做真实/伪 SMTP 冒烟。
+- **关联**：iter-18、journal/2026-10-22。
+
+## ISSUE-017 审计记录的 level 不是生效级别
+- **状态**：CLOSED（iter-20）
+- **现象**：真实邮件验证时，场景配置 `level: ERROR`，审计输出 `level=WARN`。
+- **根因**：管线已按「事件与场景取高」算出生效级别用于渲染/优先级，但 `audit()` 写的是
+  `event.level()`（事件原始级别）。
+- **修复**：`dispatch → sendOne → audit` 传递生效级别；`reject`/`defer` 用原始级别（未进入渲染）。
+- **证据**：新增 `EffectiveLevelAuditTest` 2 个用例（场景更高 / 事件更高），修复前会失败。
+- **关联**：iter-20、journal/2026-10-22。
+
 ## ISSUE-018 仓库缺少架构级代码审计与代理工作说明
 - **状态**：CLOSED（iter-18）
 - **现象**：仓库没有面向 AI / 新接手者的工作规则，也没有一份以架构师视角系统梳理当前 SDK 风险的审计报告。

@@ -12,8 +12,10 @@ import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.NotifyContext;
 
 import jakarta.mail.AuthenticationFailedException;
+import jakarta.mail.Authenticator;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
+import jakarta.mail.PasswordAuthentication;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
 import jakarta.mail.internet.InternetAddress;
@@ -44,7 +46,38 @@ public class EmailChannel implements NotifyChannel {
      */
     public EmailChannel(EmailChannelProperties properties) {
         this.properties = properties;
-        this.session = Session.getInstance(mailProperties(properties), null);
+        this.session = Session.getInstance(mailProperties(properties), authenticator(properties));
+    }
+
+    /**
+     * 认证器：有用户名时才提供凭据。
+     *
+     * <p>{@code Transport.send(message)} 不带 user/password 参数，没有 Authenticator 时
+     * 不会向 SMTP 服务器提交凭据，163 等要求认证的服务器会直接回 535。</p>
+     *
+     * @param properties 配置
+     * @return 认证器；无用户名时为 null
+     */
+    private static Authenticator authenticator(EmailChannelProperties properties) {
+        String username = properties.getUsername();
+        if (username == null || username.isBlank()) {
+            return null;
+        }
+        return new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(properties.getUsername(), properties.getPassword());
+            }
+        };
+    }
+
+    /**
+     * 供测试检查 Session 配置。
+     *
+     * @return Session
+     */
+    Session session() {
+        return session;
     }
 
     @Override

@@ -11,6 +11,7 @@
 | 偏离设计书或做出取舍 | 背景、决策、理由、影响、复审条件 | `decisions.md`（D-NNN） |
 | 发现缺陷 / 技术债 / 环境坑 | 现象、证据、影响、处理计划、状态 | `issues.md`（ISSUE-NNN） |
 | 状态变化（完成了什么、下一步是什么） | 覆盖更新快照 | `STATE.md` |
+| 每日工作与思路（含验证结果、待查项） | 日期、目标、过程、结论、下一步 | `journal/YYYY-MM-DD.md` |
 | 环境事实（服务器、构建工具链） | 只写非敏感信息 | `env.md` |
 
 **硬规则**
@@ -29,6 +30,8 @@
 ├── decisions.md               # 决策与刻意偏离（D-NNN）
 ├── issues.md                  # 问题点与技术债（ISSUE-NNN）
 ├── env.md                     # 环境事实（构建/服务器/集群）
+├── journal/                   # 每日工作与思路
+│   └── YYYY-MM-DD.md
 └── iterations/                # 每次大改动的改动记录
     └── YYYY-MM-DD-iter-NN-slug.md
 ```
@@ -49,8 +52,9 @@ grep -n "状态：OPEN" .memory/issues.md
 
 ## 分支约定
 
-每次大改动：`<type>/<slug>`（`feat/` `fix/` `build/` `chore/`），完成 → 本地 `mvn verify` → 写记忆 →
+每次大改动：新功能 `feature/<slug>`、缺陷修复 `bugfix/<slug>`，完成 → 本地 `mvn verify` → 写记忆 →
 `git merge --no-ff` 回 `master` → push。合并提交信息里带 `[iter-NN]`，与 `iterations/` 文件一一对应。
+开工前先 `git pull`。
 
 ## 与设计书的关系
 
