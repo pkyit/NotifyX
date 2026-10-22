@@ -286,7 +286,26 @@ public final class NotifyPipeline {
                     }
                     continue;
                 }
-                breaker.recordSuccess();
+                if (result.status() == SendResult.Status.SUCCESS) {
+                    breaker.recordSuccess();
+                    break;
+                }
+                if (result.status() == SendResult.Status.FAIL_RETRYABLE) {
+                    breaker.recordFailure();
+                    if (attempt >= maxAttempts) {
+                        break;
+                    }
+                    if (!sleep(retryPolicy.delayAfter(attempt, channel))) {
+                        result = SendResult.retryable("interrupted while retrying", elapsed(started));
+                        break;
+                    }
+                    continue;
+                }
+                if (result.status() == SendResult.Status.FAIL_NON_RETRYABLE) {
+                    breaker.recordFailure();
+                    break;
+                }
+                // 渠道主动抑制（SUPPRESSED/DEDUPED/RATE_LIMITED/CIRCUIT_OPEN）不计熔断成功或失败
                 break;
             } catch (ChannelException ex) {
                 breaker.recordFailure();
@@ -328,7 +347,7 @@ public final class NotifyPipeline {
         if (failed) {
             persistFailure(event, channel.name(), result, maxAttempts, dedupeKey);
             notifyOnError(event, result);
-        } else if (result != null && result.status() == SendResult.Status.SUCCESS) {
+        } else if (result.status() == SendResult.Status.SUCCESS) {
             notifyOnSuccess(event);
         }
         return failed;

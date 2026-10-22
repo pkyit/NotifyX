@@ -255,3 +255,13 @@
   修复前 `FailureStore` 为空、审计为空。
 - **关闭方式**：渲染包进 `try/catch`，失败构造 `FAIL_NON_RETRYABLE` 并走
   `audit → metrics → persistFailure → onError` 的统一路径；不记渠道熔断失败。
+
+## ISSUE-027 渠道返回 FAIL_* 状态时被当成熔断成功且不重试
+- **状态**：CLOSED（iter-35）
+- **现象**：`NotifyPipeline.sendOne()` 对任何非 null `SendResult` 都执行
+  `breaker.recordSuccess(); break;`。渠道若用 `SendResult.retryable/nonRetryable` 表达失败，
+  不会重试、不会打开熔断，失败状态只在事后审计/落盘。
+- **证据**：`NotifyPipelineResultStatusTest` 4 个用例；修复前 `FAIL_RETRYABLE` 只调用 1 次、
+  连续失败结果不会触发 `CIRCUIT_OPEN`。
+- **关闭方式**：按 `SUCCESS / FAIL_RETRYABLE / FAIL_NON_RETRYABLE / 抑制状态` 分支处理；
+  可重试结果按 `maxAttempts` 退避重试，失败结果记熔断，抑制状态保持中立。
