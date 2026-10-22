@@ -232,8 +232,23 @@ public final class NotifyPipeline {
         String traceId = resolveTraceId(event);
         String spanId = resolveSpanId(event);
         Map<String, Object> tracedParams = withTrace(renderParams, traceId, spanId);
-        String renderedTitle = templateEngine.render(templateFor(scene).title(), tracedParams, channel.preferredFormat());
-        String renderedContent = templateEngine.render(templateFor(scene).content(), tracedParams, channel.preferredFormat());
+        int maxAttempts = retryPolicy.attemptsFor(channel);
+        if (scene.retry() > 0) {
+            maxAttempts = Math.min(maxAttempts, scene.retry());
+        }
+        String renderedTitle;
+        String renderedContent;
+        try {
+            renderedTitle = templateEngine.render(templateFor(scene).title(), tracedParams,
+                    channel.preferredFormat());
+            renderedContent = templateEngine.render(templateFor(scene).content(), tracedParams,
+                    channel.preferredFormat());
+        } catch (RuntimeException ex) {
+            String reason = "template render failed: " + ex.getClass().getSimpleName()
+                    + (ex.getMessage() == null ? "" : ": " + ex.getMessage());
+            return failBeforeSend(event, level, channel, receiver,
+                    SendResult.nonRetryable(reason, Duration.ZERO), maxAttempts, dedupeKey);
+        }
         NotifyContext baseContext = NotifyContext.builder(event)
                 .renderedTitle(renderedTitle)
                 .renderedContent(renderedContent)
@@ -249,10 +264,6 @@ public final class NotifyPipeline {
         }
 
         CircuitBreaker breaker = breakerFor(channel.name());
-        int maxAttempts = retryPolicy.attemptsFor(channel);
-        if (scene.retry() > 0) {
-            maxAttempts = Math.min(maxAttempts, scene.retry());
-        }
         long started = System.nanoTime();
         SendResult result = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -321,6 +332,15 @@ public final class NotifyPipeline {
             notifyOnSuccess(event);
         }
         return failed;
+    }
+
+    private boolean failBeforeSend(NotifyEvent event, Level level, NotifyChannel channel, String receiver,
+                                   SendResult result, int maxAttempts, String dedupeKey) {
+        audit(event, level, channel.name(), receiver, result, Duration.ZERO);
+        metrics.sendResult(channel.name(), event.scene(), result.status(), Duration.ZERO);
+        persistFailure(event, channel.name(), result, maxAttempts, dedupeKey);
+        notifyOnError(event, result);
+        return true;
     }
 
     private void notifyOnSuccess(NotifyEvent event) {

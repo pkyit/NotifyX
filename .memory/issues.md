@@ -246,3 +246,12 @@
 - **证据**：`WebhookChannelTest` 新增 5 个用例；修复前嵌套参数断言失败、签名头可被 `forged` 覆盖。
 - **关闭方式**：递归 JSON 序列化；保留头先过滤后写；URL 只允许 http/https 并做 host 校验；
   URI/header/HMAC 异常统一转 `ChannelProtocolException`。
+
+## ISSUE-026 模板渲染异常绕过审计、失败落盘与 onError
+- **状态**：CLOSED（iter-34）
+- **现象**：`NotifyPipeline.sendOne()` 在发送重试循环之前渲染标题/正文，渲染异常直接落到
+  `handle()` 外层 catch；该渠道没有审计、没有失败落盘、`onError` 不触发。
+- **证据**：`NotifyPipelineFailureContainmentTest.shouldPersistTemplateRenderFailure`；
+  修复前 `FailureStore` 为空、审计为空。
+- **关闭方式**：渲染包进 `try/catch`，失败构造 `FAIL_NON_RETRYABLE` 并走
+  `audit → metrics → persistFailure → onError` 的统一路径；不记渠道熔断失败。
