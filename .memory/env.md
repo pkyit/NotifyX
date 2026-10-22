@@ -127,6 +127,7 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 | 镜像 | `registry.cn-hangzhou.aliyuncs.com/pkyit/rabbitmq:3.13.0` |
 | 连接 | `kubectl -n notifyx-infra port-forward svc/rabbitmq 15672:5672` |
 | 测试 | `NOTIFYX_RABBITMQ_HOST=127.0.0.1 NOTIFYX_RABBITMQ_PORT=15672 mvn -pl notifyx-bus-rabbitmq -am test -Dtest=RabbitMqBusLiveTest` → 1/1 |
+| Consumer | `--notifyx.consumer.transport=rabbitmq --notifyx.consumer.rabbitmq.queue=<队列> --spring.rabbitmq.host=127.0.0.1 --spring.rabbitmq.port=15672`（队列需 producer 先声明） |
 | 注意 | 默认 guest/guest；生产需独立用户/vhost 与 TLS |
 
 ## 11. CI 矩阵（§17.4）

@@ -32,7 +32,13 @@ notifyx:
       channels: [log]
       silent-window: 0s
   consumer:
+    transport: kafka           # kafka | rabbitmq
     topic: ${NOTIFYX_TOPIC:notifyx-events}
+    rabbitmq:
+      queue: ${NOTIFYX_RABBITMQ_QUEUE:notifyx-events}
     idempotency-store: memory   # memory | redis | jdbc
     idempotency-ttl: 24h
     max-entries: 100000
+    jdbc-url: ${NOTIFYX_JDBC_URL:}
+    jdbc-user: ${NOTIFYX_JDBC_USER:}
+    jdbc-password: ${NOTIFYX_JDBC_PASSWORD:}

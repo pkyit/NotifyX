@@ -24,6 +24,15 @@ public class ConsumerProperties {
     /** 幂等实现：memory | redis | jdbc。 */
     private String idempotencyStore = "memory";
 
+    /** JDBC 幂等 URL（仅 jdbc 模式）。 */
+    private String jdbcUrl;
+
+    /** JDBC 用户名。 */
+    private String jdbcUser;
+
+    /** JDBC 密码。 */
+    private String jdbcPassword;
+
     public String getTopic() {
         return topic;
     }
@@ -54,5 +63,29 @@ public class ConsumerProperties {
 
     public void setIdempotencyStore(String idempotencyStore) {
         this.idempotencyStore = idempotencyStore;
+    }
+
+    public String getJdbcUrl() {
+        return jdbcUrl;
+    }
+
+    public void setJdbcUrl(String jdbcUrl) {
+        this.jdbcUrl = jdbcUrl;
+    }
+
+    public String getJdbcUser() {
+        return jdbcUser;
+    }
+
+    public void setJdbcUser(String jdbcUser) {
+        this.jdbcUser = jdbcUser;
+    }
+
+    public String getJdbcPassword() {
+        return jdbcPassword;
+    }
+
+    public void setJdbcPassword(String jdbcPassword) {
+        this.jdbcPassword = jdbcPassword;
     }
 }

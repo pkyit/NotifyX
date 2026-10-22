@@ -390,3 +390,20 @@
 - **理由**：producer-only 阶段只保证「可靠发出 + 失败落盘」；退避/死信由 consumer 统一处理。
 - **影响**：串行 publish 吞吐低于多 channel；confirm 同步等待会增加延迟（默认 5s 超时）。
 - **复审条件**：高吞吐场景改为 channel 池/ThreadLocal + 异步 confirm；consumer 落地时补 DLX 声明。
+
+## D-026 Consumer 传输切换：条件监听器 + JDBC 直连 DriverManager
+
+- **日期**：2026-10-22（iter-29）
+- **状态**：生效
+- **背景**：consumer 同时支持 Kafka/RabbitMQ 时，两个监听器不能都启动；
+  另外 `spring-boot-starter-jdbc` 会让 Boot 在未配置 URL 时启动失败。
+- **决策**：
+  1. `notifyx.consumer.transport=kafka|rabbitmq`，两个监听器用互斥条件装配；
+     Kafka 为默认（matchIfMissing）；
+  2. JDBC 幂等改用 `DriverManager` + `jdbc-url/user/password`，不引 `spring-boot-starter-jdbc`；
+  3. Rabbit 监听器参数用 `Message` + UTF-8 解码，避免 JSON converter 依赖；
+  4. 队列由 producer 声明（durable），consumer 假定已存在；启动顺序写入文档；
+  5. 重复消息 ACK 丢弃；DLX/重试不在本轮。
+- **理由**：consumer 是独立部署应用，不应因「未启用的存储」自动配置失败；传输选择显式化。
+- **影响**：Rabbit consumer 必须在 producer 至少声明过队列后启动；JDBC 驱动由部署方提供。
+- **复审条件**：多传输同时消费（Kafka→Rabbit 桥接）或自动声明队列需求出现时，改用 `RabbitAdmin` + 拓扑 Bean。

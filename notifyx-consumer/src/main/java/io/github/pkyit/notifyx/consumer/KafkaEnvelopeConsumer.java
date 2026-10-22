@@ -2,6 +2,7 @@ package io.github.pkyit.notifyx.consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +20,8 @@ import io.github.pkyit.notifyx.core.support.NotifyEnvelopeCodec;
  * @since 1.0
  */
 @Component
+@ConditionalOnProperty(prefix = "notifyx.consumer", name = "transport", havingValue = "kafka",
+        matchIfMissing = true)
 public class KafkaEnvelopeConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaEnvelopeConsumer.class);
