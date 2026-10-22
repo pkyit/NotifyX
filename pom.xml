@@ -48,6 +48,7 @@
         <module>notifyx-store-redis</module>
         <module>notifyx-store-jdbc</module>
         <module>notifyx-bus-kafka</module>
+        <module>notifyx-bus-rabbitmq</module>
         <module>notifyx-consumer</module>
         <module>notifyx-spring-boot-starter</module>
         <module>notifyx-spring-boot3-starter</module>
