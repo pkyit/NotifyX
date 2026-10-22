@@ -33,6 +33,7 @@ import io.github.pkyit.notifyx.core.pipeline.DefaultNotifyKit;
 import io.github.pkyit.notifyx.core.pipeline.EscalationPolicy;
 import io.github.pkyit.notifyx.core.pipeline.EventAggregator;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
+import io.github.pkyit.notifyx.core.pipeline.MqNotifyKit;
 import io.github.pkyit.notifyx.core.pipeline.NotifyPipeline;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
 import io.github.pkyit.notifyx.core.pipeline.RetryPolicy;
@@ -49,6 +50,7 @@ import io.github.pkyit.notifyx.core.spi.DedupeStore;
 import io.github.pkyit.notifyx.core.spi.EventFilter;
 import io.github.pkyit.notifyx.core.spi.FailureStore;
 import io.github.pkyit.notifyx.core.spi.Masker;
+import io.github.pkyit.notifyx.core.spi.NotifyBus;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.RateLimiter;
 import io.github.pkyit.notifyx.core.spi.TemplateEngine;
@@ -321,6 +323,7 @@ public class NotifyxAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "notifyx", name = "mode", havingValue = "local", matchIfMissing = true)
     public NotifyKit notifyxNotifyKit(NotifyxProperties properties,
                                       ObjectProvider<NotifyChannel> channels,
                                       TemplateEngine templateEngine,
@@ -366,6 +369,24 @@ public class NotifyxAutoConfiguration {
                 filters.size(), channels.orderedStream().map(NotifyChannel::name).toList(),
                 escalation.ruleCount());
         return new DefaultNotifyKit(pipeline, taskExecutor, traceContext);
+    }
+
+    /**
+     * MQ 模式门面（producer-only）：只发布报文，不消费、不渲染。
+     *
+     * @param bus 总线
+     * @param failureStore 失败兜底
+     * @param metrics 指标
+     * @param properties 配置
+     * @param environment 环境
+     * @return 门面
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "notifyx", name = "mode", havingValue = "mq")
+    public NotifyKit notifyxMqNotifyKit(NotifyBus bus, FailureStore failureStore, NotifyMetrics metrics,
+                                        NotifyxProperties properties, Environment environment) {
+        return new MqNotifyKit(bus, failureStore, metrics, resolveInstanceId(properties, environment));
     }
 
     /**

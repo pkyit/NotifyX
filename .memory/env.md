@@ -109,7 +109,17 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 | DDL | `notifyx-store-jdbc/src/main/resources/sql/{mysql,postgresql,h2}/schema.sql` |
 | 注意 | 测试库仅用于验证；生产需建独立 schema/用户并做权限最小化 |
 
-## 9. CI 矩阵（§17.4）
+## 9. Kafka（iter-25 实测）
+
+| 项 | 值 |
+| --- | --- |
+| 部署 | `deploy/k8s/kafka.yaml`，namespace `notifyx-infra`，KRaft 单节点（Running，k8s-node3） |
+| 镜像 | `registry.cn-hangzhou.aliyuncs.com/pkyit/kafka:4.3.1` |
+| 连接 | `kubectl -n notifyx-infra port-forward svc/kafka 19092:9092`（advertised 为 `localhost:19092`） |
+| 测试 | `NOTIFYX_KAFKA_BOOTSTRAP=127.0.0.1:19092 mvn -pl notifyx-bus-kafka -am test -Dtest=KafkaBusLiveTest` → 1/1 |
+| 注意 | 单节点 replication=1，仅用于验证；生产需多副本/多 broker |
+
+## 10. CI 矩阵（§17.4）
 
 `.github/workflows/ci.yml`：Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
 当前仓库托管在 Gitee，GitHub Actions 不会自动触发；Gitee Go 可直接执行 `mvn -B -ntp verify`。
