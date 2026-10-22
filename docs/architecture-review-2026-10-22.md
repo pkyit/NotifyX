@@ -385,3 +385,26 @@ NotifyX 的骨架是健康的：模块边界、不可变事件、责任链、质
 - **安全开关不能只是配置项；**
 - **健康状态不能把默认能力当故障。**
 建议将本审计中的 P0 项作为 iter-18 的第一目标，完成后再考虑对外发布 GA 或宣称生产可用。
+---
+## 7. 修复状态（2026-10-22 夜间自动化，iter-32 ~ iter-36）
+
+> 本节是追加状态，不修改原审计结论；原始证据仍以 `master@b4fb473` 为准。
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| A05 意外异常 / null 结果绕过审计、落盘、熔断 | **已修复**（iter-32） | `NotifyPipelineFailureContainmentTest`：渠道抛 `IllegalStateException` / 返回 null 均进入 `FAIL_RETRYABLE`、审计与落盘 |
+| A05 模板渲染异常 | **已修复**（iter-34） | `shouldPersistTemplateRenderFailure`：`FAIL_NON_RETRYABLE`、落盘、`onError`，渠道不被调用 |
+| A08 Email Authenticator | **已修复**（iter-18） | 真实 163 SMTP 发送成功；`EmailChannelTest` 8 个用例 |
+| A09 Webhook 嵌套 JSON / 保留头 / 异常分类 | **已修复**（iter-33） | `WebhookChannelTest` 17 个用例，含嵌套结构、签名头不可覆盖、非法 URL/header |
+| A11 自定义 EventFilter 未装配 | **已修复**（iter-32） | `CustomFilterWiringTest`：两个 Bean 按 order 执行 |
+| A02 FailedRecord 粒度 / A03 dedupe release | **未修复（需决策）** | 需要 `FailedRecord` 结构 + DDL 变更 + 定向重投；见 `STATE.md` §5 |
+| A04 无渠道当成功 | **未修复（需决策）** | 现有 `NotifyPipelineRetryTest.shouldSkipWhenNoChannel` 固化了该行为 |
+| A06 队列丢弃不落盘 | **未修复** | `PriorityNotifyExecutor` 仍只计数；需要任务携带事件上下文 |
+| A07 脱敏链路不完整 | **未修复** | 只修了 `DefaultMasker` 递归；审计全字段、`before-send`、envelope 落盘仍未接入 |
+| A10 Quiet hours defer | **未修复** | 自动装配仍无 `DeferredHandler` |
+| A12 配置绑定但不生效 | **未修复** | 仍有多项属性没有运行时使用点 |
+| A13/A14/A15 | **未修复** | 升级窗口、去重 fail-closed、队列/熔断指标仍待处理 |
+| A01 结构化 DeliveryOutcome | **未修复** | `handle()` 仍返回 boolean；A04/A06 的根因 |
+
+当前全量验证：276 用例（263 执行 + 13 live 跳过），0 failure / 0 error；
+Spotless / Checkstyle / JaCoCo 通过。详见 `.memory/STATE.md` 与 `iterations/2026-10-22-iter-3*.md`。
