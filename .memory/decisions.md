@@ -360,3 +360,18 @@
 - **理由**：先验证「MQ 重复投递只发一次」的完整链路；持久化幂等涉及存储选型与清理策略。
 - **影响**：consumer 重启/多实例时可能重复通知；生产需尽快切换 Redis/JDBC 实现。
 - **复审条件**：consumer 需要水平扩展或不能接受重启重复时，立即补持久化幂等与分区消费。
+
+## D-024 Consumer 幂等三档：Redis 降级、JDBC fail-open
+
+- **日期**：2026-10-22（iter-27）
+- **状态**：生效
+- **背景**：§11.4 要求 Redis/DB/内存三档幂等；幂等存储本身故障时，不能把通知全部丢掉。
+- **决策**：
+  1. `notifyx.consumer.idempotency-store=memory|redis|jdbc` 条件装配；
+  2. Redis：`nx:idem:<key>` + `SET NX EX`（默认 24h）；异常降级内存（可能重复，不丢）；
+  3. JDBC：`nx_idempotency` 主键冲突（SQLState 23xxx）判定重复；其它 SQL 异常 fail-open 并告警；
+  4. 空幂等键直接放行；
+  5. DDL 按 mysql/postgresql 分目录，H2 仅测试内建表。
+- **理由**：幂等是去重优化，不是投递前置条件；fail-open 与「重复发比不发好」一致。
+- **影响**：Redis/JDBC 故障期间可能重复通知；`nx_idempotency` 暂无过期清理，需要运维/后续任务。
+- **复审条件**：多实例 consumer 上线前补 retention SQL；若有「绝不重复」硬要求，改为 fail-closed。

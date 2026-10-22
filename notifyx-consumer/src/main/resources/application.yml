@@ -33,5 +33,6 @@ notifyx:
       silent-window: 0s
   consumer:
     topic: ${NOTIFYX_TOPIC:notifyx-events}
+    idempotency-store: memory   # memory | redis | jdbc
     idempotency-ttl: 24h
     max-entries: 100000

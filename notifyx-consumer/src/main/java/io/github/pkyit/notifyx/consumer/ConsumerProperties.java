@@ -21,6 +21,9 @@ public class ConsumerProperties {
     /** 内存幂等容量上限。 */
     private int maxEntries = 100_000;
 
+    /** 幂等实现：memory | redis | jdbc。 */
+    private String idempotencyStore = "memory";
+
     public String getTopic() {
         return topic;
     }
@@ -43,5 +46,13 @@ public class ConsumerProperties {
 
     public void setMaxEntries(int maxEntries) {
         this.maxEntries = maxEntries;
+    }
+
+    public String getIdempotencyStore() {
+        return idempotencyStore;
+    }
+
+    public void setIdempotencyStore(String idempotencyStore) {
+        this.idempotencyStore = idempotencyStore;
     }
 }
