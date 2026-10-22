@@ -14,8 +14,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import io.github.pkyit.notifyx.core.exception.TemplateRenderException;
 import io.github.pkyit.notifyx.core.model.Level;
 import io.github.pkyit.notifyx.core.model.NotifyEvent;
+import io.github.pkyit.notifyx.core.model.RenderFormat;
 import io.github.pkyit.notifyx.core.model.SendResult;
 import io.github.pkyit.notifyx.core.spi.AuditRecord;
 import io.github.pkyit.notifyx.core.spi.AuditRecorder;
@@ -24,6 +26,7 @@ import io.github.pkyit.notifyx.core.spi.FailureStore;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.NotifyContext;
 import io.github.pkyit.notifyx.core.spi.RecordStatus;
+import io.github.pkyit.notifyx.core.spi.TemplateEngine;
 import io.github.pkyit.notifyx.core.support.SimpleTemplateEngine;
 
 /**
@@ -87,12 +90,31 @@ class NotifyPipelineFailureContainmentTest {
         assertThat(onError).hasValue(1);
     }
 
+    @Test
+    @DisplayName("模板渲染异常进入审计与失败落盘，不调用渠道")
+    void shouldPersistTemplateRenderFailure() {
+        AtomicInteger onError = new AtomicInteger();
+
+        boolean handled = pipeline(new RetryPolicy(2, Duration.ofMillis(1), Duration.ofMillis(5), 0.0),
+                new FailingTemplateEngine()).handle(event(onError));
+
+        assertThat(handled).isFalse();
+        assertThat(channel.calls).isZero();
+        assertThat(audit.statuses()).containsExactly("FAIL_NON_RETRYABLE");
+        assertThat(failures.records).hasSize(1);
+        assertThat(onError).hasValue(1);
+    }
+
     private NotifyPipeline pipeline(RetryPolicy retryPolicy) {
+        return pipeline(retryPolicy, new SimpleTemplateEngine());
+    }
+
+    private NotifyPipeline pipeline(RetryPolicy retryPolicy, TemplateEngine templateEngine) {
         SceneConfig scene = SceneConfig.builder("SCENE_A").channels(List.of("scripted")).build();
         return NotifyPipeline.builder()
                 .sceneRegistry(SceneRegistry.of(Map.of(scene.scene(), scene), SceneRegistry.emptyDefaults()))
                 .channelRegistry(ChannelRegistry.of(List.of(channel)))
-                .templateEngine(new SimpleTemplateEngine())
+                .templateEngine(templateEngine)
                 .templates(Map.of("default", new MessageTemplate("default", "t", "${content}")))
                 .retryPolicy(retryPolicy)
                 .failureStore(failures)
@@ -136,6 +158,19 @@ class NotifyPipelineFailureContainmentTest {
             }
             delivered.add(ctx);
             return SendResult.success("1", null, Duration.ZERO);
+        }
+    }
+
+    private static final class FailingTemplateEngine implements TemplateEngine {
+
+        @Override
+        public String name() {
+            return "failing";
+        }
+
+        @Override
+        public String render(String template, Map<String, Object> params, RenderFormat format) {
+            throw new TemplateRenderException("template boom");
         }
     }
 
