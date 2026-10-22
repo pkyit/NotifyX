@@ -73,6 +73,34 @@ class DefaultMaskerTest {
     }
 
     @Test
+    @DisplayName("maskParams 对嵌套 Map / List 递归脱敏")
+    @SuppressWarnings("unchecked")
+    void shouldMaskNestedParams() {
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("phone", "13812345678");
+        profile.put("email", "bob@example.com");
+        profile.put("orderId", "SO-2");
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("user", profile);
+        params.put("contacts", java.util.List.of(
+                Map.of("mobile", "13912345678"),
+                Map.of("note", "vip")));
+
+        Map<String, Object> masked = masker.maskParams(params);
+
+        Map<String, Object> maskedProfile = (Map<String, Object>) masked.get("user");
+        assertThat(maskedProfile).containsEntry("phone", "138****5678");
+        assertThat(maskedProfile).containsEntry("email", "b***@example.com");
+        assertThat(maskedProfile).containsEntry("orderId", "SO-2");
+
+        java.util.List<Map<String, Object>> contacts = (java.util.List<Map<String, Object>>) masked.get("contacts");
+        assertThat(contacts.get(0)).containsEntry("mobile", "139****5678");
+        assertThat(contacts.get(1)).containsEntry("note", "vip");
+        assertThat(profile.get("phone")).isEqualTo("13812345678");
+    }
+
+    @Test
     @DisplayName("maskText 兜底脱敏文本中的身份证号")
     void shouldMaskTextIdCards() {
         String text = "用户身份证 110101199001011234 校验失败";

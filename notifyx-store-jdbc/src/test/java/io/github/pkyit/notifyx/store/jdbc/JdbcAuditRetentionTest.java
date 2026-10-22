@@ -1,9 +1,12 @@
 package io.github.pkyit.notifyx.store.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.Statement;
+import java.time.Duration;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +49,52 @@ class JdbcAuditRetentionTest extends H2TestSupport {
 
         assertThat(new JdbcAuditRetention(dataSource).purgeOlderThan(30)).isEqualTo(1);
         assertThat(count("nx_audit")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("删除失败时不空转：本轮立即结束并保留记录")
+    void shouldStopWhenDeleteFails() throws Exception {
+        JdbcAuditRecorder recorder = new JdbcAuditRecorder(dataSource);
+        long now = System.currentTimeMillis();
+        recorder.record(record("old", now - 3 * 86_400_000L));
+
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TRIGGER reject_delete BEFORE DELETE ON nx_audit FOR EACH ROW CALL '"
+                    + RejectDelete.class.getName() + "'");
+        }
+
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
+            int deleted = new JdbcAuditRetention(dataSource, 1).purgeBefore(now);
+            assertThat(deleted).isZero();
+        });
+        assertThat(count("nx_audit")).isEqualTo(1);
+    }
+
+    /**
+     * 模拟删除失败（权限 / 锁 / 只读库）的 H2 触发器。
+     */
+    public static final class RejectDelete implements org.h2.api.Trigger {
+
+        @Override
+        public void init(Connection conn, String schemaName, String triggerName, String tableName,
+                         boolean before, int type) {
+            // no-op
+        }
+
+        @Override
+        public void fire(Connection conn, Object[] oldRow, Object[] newRow) throws java.sql.SQLException {
+            throw new java.sql.SQLException("delete denied for test");
+        }
+
+        @Override
+        public void close() {
+            // no-op
+        }
+
+        @Override
+        public void remove() {
+            // no-op
+        }
     }
 
     private AuditRecord record(String eventId, long createdAt) {

@@ -71,7 +71,13 @@ public final class JdbcAuditRetention {
             if (ids.isEmpty()) {
                 return total;
             }
-            total += deleteBatch(ids);
+            int deleted = deleteBatch(ids);
+            total += deleted;
+            if (deleted == 0) {
+                log.warn("notifyx jdbc audit retention delete made no progress, stop this round: selected={}",
+                        ids.size());
+                return total;
+            }
             if (ids.size() < batchSize) {
                 return total;
             }

@@ -57,6 +57,18 @@ class MemoryRateLimiterTest {
     }
 
     @Test
+    @DisplayName("currentCount 按窗口清理过期计数，不返回陈旧值")
+    void currentCountShouldPruneExpired() throws Exception {
+        Duration window = Duration.ofMillis(30);
+        assertThat(limiter.tryAcquire("k", 1, window)).isTrue();
+        assertThat(limiter.currentCount("k", window)).isEqualTo(1);
+
+        Thread.sleep(50);
+
+        assertThat(limiter.currentCount("k", window)).isZero();
+    }
+
+    @Test
     @DisplayName("evictExpired 清理过期 key，防止 map 无限增长")
     void shouldEvictExpiredKeys() throws Exception {
         limiter.tryAcquire("old", 1, Duration.ofMillis(1));

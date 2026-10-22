@@ -263,6 +263,18 @@ public final class NotifyPipeline {
             NotifyContext context = baseContext.withAttempt(attempt);
             try {
                 result = channel.send(context);
+                if (result == null) {
+                    breaker.recordFailure();
+                    if (attempt >= maxAttempts) {
+                        result = SendResult.retryable("channel returned null", elapsed(started));
+                        break;
+                    }
+                    if (!sleep(retryPolicy.delayAfter(attempt, channel))) {
+                        result = SendResult.retryable("interrupted while retrying", elapsed(started));
+                        break;
+                    }
+                    continue;
+                }
                 breaker.recordSuccess();
                 break;
             } catch (ChannelException ex) {
@@ -270,19 +282,38 @@ public final class NotifyPipeline {
                 boolean retryable = isRetryable(channel, ex);
                 if (!retryable || attempt >= maxAttempts) {
                     result = retryable
-                            ? SendResult.retryable(ex.getMessage(), Duration.ofNanos(System.nanoTime() - started))
-                            : SendResult.nonRetryable(ex.getMessage(), Duration.ofNanos(System.nanoTime() - started));
+                            ? SendResult.retryable(ex.getMessage(), elapsed(started))
+                            : SendResult.nonRetryable(ex.getMessage(), elapsed(started));
                     break;
                 }
-                sleep(retryPolicy.delayAfter(attempt, channel));
+                if (!sleep(retryPolicy.delayAfter(attempt, channel))) {
+                    result = SendResult.retryable("interrupted while retrying", elapsed(started));
+                    break;
+                }
+            } catch (RuntimeException ex) {
+                breaker.recordFailure();
+                String reason = "unexpected channel error: " + ex.getClass().getSimpleName()
+                        + (ex.getMessage() == null ? "" : ": " + ex.getMessage());
+                if (attempt >= maxAttempts) {
+                    result = SendResult.retryable(reason, elapsed(started));
+                    break;
+                }
+                if (!sleep(retryPolicy.delayAfter(attempt, channel))) {
+                    result = SendResult.retryable("interrupted while retrying", elapsed(started));
+                    break;
+                }
             }
         }
-        Duration cost = result == null ? Duration.ZERO : result.cost();
+        if (result == null) {
+            // 防御性兜底：任何情况下都不能把「渠道没有结果」当成成功
+            result = SendResult.retryable("channel produced no result", elapsed(started));
+        }
+        Duration cost = result.cost();
         audit(event, level, channel.name(), receiver, result, cost);
-        metrics.sendResult(channel.name(), event.scene(), result == null ? null : result.status(), cost);
-        boolean failed = result != null && (result.status() == SendResult.Status.FAIL_RETRYABLE
+        metrics.sendResult(channel.name(), event.scene(), result.status(), cost);
+        boolean failed = result.status() == SendResult.Status.FAIL_RETRYABLE
                 || result.status() == SendResult.Status.FAIL_NON_RETRYABLE
-                || result.status() == SendResult.Status.CIRCUIT_OPEN);
+                || result.status() == SendResult.Status.CIRCUIT_OPEN;
         if (failed) {
             persistFailure(event, channel.name(), result, maxAttempts, dedupeKey);
             notifyOnError(event, result);
@@ -395,12 +426,18 @@ public final class NotifyPipeline {
                 && !(ex instanceof io.github.pkyit.notifyx.core.exception.ChannelProtocolException);
     }
 
-    private static void sleep(Duration duration) {
+    private static boolean sleep(Duration duration) {
         try {
             Thread.sleep(duration.toMillis());
+            return true;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            return false;
         }
+    }
+
+    private static Duration elapsed(long started) {
+        return Duration.ofNanos(System.nanoTime() - started);
     }
 
     private CircuitBreaker breakerFor(String channel) {

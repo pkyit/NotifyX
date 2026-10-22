@@ -195,3 +195,42 @@
 - **证据**：新增 `.editorconfig`；`.gitignore` 新增 `*.log.gz` 与 `/.workbuddy/`。
 - **影响**：跨编辑器缩进 / 换行 / 编码不一致，本地工具产物可能误入版本库。
 - **关闭方式**：新增 `.editorconfig` 并补充 `.gitignore` 忽略规则。
+
+## ISSUE-020 渠道抛非 ChannelException / 返回 null 时绕过审计、熔断与落盘
+- **状态**：CLOSED（iter-32）
+- **现象**：`NotifyPipeline.sendOne()` 只捕获 `ChannelException`；渠道抛 `IllegalStateException`、`NullPointerException`
+  或返回 `null` 时，异常落到 `handle()` 外层 catch，导致本次发送没有审计、没有失败落盘、熔断器不记失败；
+  半开状态的 `probeInFlight` 还可能永久为 true。
+- **证据**：`NotifyPipelineFailureContainmentTest` 三个用例；修复前“持续抛非 ChannelException”会返回 true
+  （被当成成功），且 `FailureStore` 为空。
+- **关闭方式**：`sendOne` 捕获 `RuntimeException` 并按可重试失败处理，`null` 结果同样转失败；中断时退出重试循环；
+  新增 `channel produced no result` 防御性兜底。
+
+## ISSUE-021 用户 EventFilter Bean 未接入责任链
+- **状态**：CLOSED（iter-32）
+- **现象**：README 承诺“定义成 Bean 即被发现”，但 `notifyxNotifyKit()` 只装配内置 Filter，
+  用户自定义 `EventFilter` 不会执行。
+- **证据**：`CustomFilterWiringTest`；修复前 `filters=4`，自定义 Filter 的调用列表为空。
+- **关闭方式**：Bean 方法注入 `ObjectProvider<EventFilter>`，合并后按 `EventFilter.order()` 升序排序。
+
+## ISSUE-022 保留期删除失败时无限重试
+- **状态**：CLOSED（iter-32）
+- **现象**：`JdbcAuditRetention.purgeBefore()` 在 `deleteBatch()` 返回 0（权限 / 锁 / 只读库）时，
+  只要 select 仍返回 `batchSize` 条记录就会一直循环，永不自退。
+- **证据**：`JdbcAuditRetentionTest.shouldStopWhenDeleteFails`（H2 触发器拒绝删除）；
+  修复前该用例会在 2s 超时内持续 select 同一批 id。
+- **关闭方式**：单批删除 0 行时记录 warn 并结束本轮，返回已删除总数。
+
+## ISSUE-023 `maskParams` 未递归处理嵌套结构
+- **状态**：CLOSED（iter-32）
+- **现象**：`DefaultMasker.maskParams()` 只处理顶层字符串；嵌套 `Map` / `List` 原样返回，
+  与接口“按 key 名递归匹配”的契约不符。
+- **证据**：`DefaultMaskerTest.shouldMaskNestedParams`；修复前嵌套 `phone/email` 不会被脱敏。
+- **关闭方式**：递归 Map / Iterable，限制深度 10，返回新结构且不修改入参。
+
+## ISSUE-024 `currentCount` 返回窗口外的陈旧计数
+- **状态**：CLOSED（iter-32）
+- **现象**：`MemoryRateLimiter.currentCount()` 直接返回 deque 大小，不按 `window` 清理过期时间戳；
+  指标/诊断会看到已经过期的计数。
+- **证据**：`MemoryRateLimiterTest.currentCountShouldPruneExpired`；修复前窗口滑过后仍返回 1。
+- **关闭方式**：`currentCount` 在 `computeIfPresent` 中清理过期元素，空 deque 移除 key。
