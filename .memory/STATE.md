@@ -1,6 +1,6 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-36：AOP SpEL 后置求值修复）
+> 更新时间：2026-10-23 06:00（夜间自动化收尾）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
@@ -124,5 +124,16 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-35 已合并；iter-36 在 `bugfix/iter-36-spel-after` 完成后合并）。
+`master`（iter-36 已合并；iter-37 未开始）。本地领先 `origin/master` 10 个提交，
+因 DSH 沙箱禁止 ssh 管道，`git push` 未成功；需在普通终端执行 `git push origin master`。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
+
+## 7. 夜间自动化收尾（2026-10-23 06:00）
+
+- 工作时段 19:00–06:00 结束，停止新增代码改动；最后一轮全量 `mvn -B -ntp clean verify`
+  于 00:04 通过（276 用例 / 263 执行 + 13 live 跳过）。
+- 本轮共 5 个迭代：iter-32（5 项可靠性修复）、iter-33（Webhook 契约）、iter-34（模板渲染失败路径）、
+  iter-35（`FAIL_*` 状态语义）、iter-36（AOP `#r/#e` 后置求值）。
+- 自动目标达到 4 轮上限，状态为 blocked/disarmed；19:00 提醒会重新启动夜间流程。
+- 未决：A02/A03、A04、A06、A07、A12–A15；邮件凭据仍未提供，决策邮件未发出；
+  本地 10 个提交未推送。
