@@ -434,6 +434,8 @@ spring:
 - `nx_audit` 写失败只 warn，不影响发送；`nx_failure_record` 用 `version` 乐观锁 CAS，
   与文件/内存实现共用同一状态机。
 - 已在真实 MySQL 8.0.46 与 PostgreSQL 16.15 上跑通审计写入与失败记录 CRUD。
+- 审计保留期：`JdbcAuditRetention.purgeOlderThan(days)` 分批删除（默认 1000/批），
+  调度由接入方负责（`@Scheduled` / CronJob），SDK 不内置后台线程。
 
 ## MQ 模式（Kafka，producer-only）
 
@@ -531,8 +533,8 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**242 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
-store-jdbc 8 / bus-kafka 5 / bus-rabbitmq 4 / consumer 12 / email 8 / logback 20 / webhook 12），
+当前基线：**244 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
+store-jdbc 10 / bus-kafka 5 / bus-rabbitmq 4 / consumer 12 / email 8 / logback 20 / webhook 12），
 另有 13 个 live 测试（Redis 8、JDBC 2、Kafka 1、RabbitMQ 1、邮件 1）默认跳过；
 CI 矩阵 JDK 17/21。
 
