@@ -79,7 +79,27 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 | 验证 | Pod 内 `kubectl cp` fat jar + `java -jar`，两条 email 审计 SUCCESS（iter-21） |
 | 清理 | 验证后 namespace `notifyx-demo` 已删除 |
 
-## 7. CI 矩阵（§17.4）
+**国内镜像清单**（`registry.cn-hangzhou.aliyuncs.com/pkyit/`，用户提供，均可拉取）：
+
+| 镜像 | 用途 |
+| --- | --- |
+| `java:jdk17-font` | 运行 sample / 构建自有镜像的基座 |
+| `redis:6.2.23` | T1 分布式去重/限流（iter-22 已部署） |
+| `kafka:4.3.1` / `rabbitmq:3.13.0` | P3 MQ 总线 |
+| `nacos:2.5.3` | 配置中心（Admin/P4 可能用） |
+| `nginx:1.31.7` | 网关/静态资源 |
+| `minio:RELEASE.2025-04-22T22-12-26Z` | 对象存储 |
+
+## 7. Redis（iter-22 实测）
+
+| 项 | 值 |
+| --- | --- |
+| 部署 | `deploy/k8s/redis.yaml`，namespace `notifyx-infra`，Deployment `redis`（Running，k8s-node2） |
+| 连接 | `kubectl -n notifyx-infra port-forward svc/redis 16379:6379` |
+| 测试 | `NOTIFYX_REDIS_HOST=127.0.0.1 NOTIFYX_REDIS_PORT=16379 mvn -pl notifyx-store-redis test -Dtest=RedisStoresLiveTest` → 5/5 |
+| 注意 | demo 未设密码；生产需密码/TLS/Sentinel 或 Cluster，并限制网络访问 |
+
+## 8. CI 矩阵（§17.4）
 
 `.github/workflows/ci.yml`：Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
 当前仓库托管在 Gitee，GitHub Actions 不会自动触发；Gitee Go 可直接执行 `mvn -B -ntp verify`。

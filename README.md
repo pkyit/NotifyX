@@ -322,7 +322,9 @@ public EventFilter debugOnlyFilter() {
 - 责任链：全局静默、场景路由、免打扰、去重（含失败释放）、场景限流、全局限流
 - 执行层：优先级队列（drop-lowest）、指数退避 + 抖动、按渠道熔断、审计、失败落盘接口
 - 失败落盘：内存（默认）/ 本地文件（按小时分片、JSON、乐观锁、磁盘上限保护，重启不丢）
-- 聚合：T0 实例内窗口聚合（被去重事件汇总成摘要；多实例需 Redis/MQ 才能跨实例，已诚实标注）
+- T1（可选）：`notifyx-store-redis` 提供 Redis 分布式去重（SET NX EX）与滑动窗限流（Lua），
+  Redis 故障自动降级内存（降级期间多实例可能重复发送）
+- 聚合：T0 实例内窗口聚合（被去重事件汇总成摘要；跨实例聚合待后续 Redis/MQ 迭代）
 - 升级：同场景连续 N 次（窗口内）后改走 `upgrade-to` 渠道，支持恢复场景/成功清零
 - 接入：`@AlarmProtect` / `@NotifyOn` + SpEL（默认禁用方法调用）、`NotifyKit` 门面
 - L3：Spring Event 桥接（`@NotifyxScene` 注解 / 配置映射，`params.__source` 可追溯）
@@ -366,6 +368,42 @@ mvn -B -pl notifyx-sample -am package -DskipTests
 # 详见 deploy/k8s/README.md
 ```
 
+## Redis 分布式存储（T1，可选）
+
+多实例部署时，用 Redis 做跨实例去重与限流：
+
+```xml
+<dependency>
+  <groupId>io.github.pkyit</groupId>
+  <artifactId>notifyx-store-redis</artifactId>
+</dependency>
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+```
+
+```yaml
+notifyx:
+  store:
+    redis:
+      enabled: true
+      key-prefix: "nx:"
+      failure-threshold: 3   # 连续失败多少次熔断
+      open-duration: 30s     # 熔断期间直接走内存
+spring:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+```
+
+- 仅当 classpath 有 `StringRedisTemplate` 时自动装配，并排在 `NotifyxAutoConfiguration` 之前，
+  管线自动切到 Redis 去重/限流。
+- Redis 异常时退回内存实现（降级期间多实例各自去重，**可能重复发送**；重复发比不发好）。
+- 验证：`deploy/k8s/redis.yaml` 起 Redis，设置 `NOTIFYX_REDIS_HOST`/`NOTIFYX_REDIS_PORT` 后运行
+  `RedisStoresLiveTest`。
+
 ## 真实邮件冒烟（可选）
 
 `EmailLiveSmokeTest` 只在环境变量齐备时执行，默认跳过（CI 无凭据）。它会**真实发送邮件**：
@@ -406,8 +444,9 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**190 个测试**（core 101 / spring 17 / autoconfigure 32 / email 8 / logback 20 / webhook 12），
-另有 1 个真实邮件冒烟测试默认跳过；CI 矩阵 JDK 17/21。
+当前基线：**199 个测试**（core 101 / spring 17 / autoconfigure 32 / store-redis 9 /
+email 8 / logback 20 / webhook 12），另有 6 个 live 测试（Redis 5、邮件 1）默认跳过；
+CI 矩阵 JDK 17/21。
 
 ## 发布
 

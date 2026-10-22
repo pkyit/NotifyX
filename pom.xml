@@ -45,6 +45,7 @@
         <module>notifyx-core</module>
         <module>notifyx-spring</module>
         <module>notifyx-spring-boot3-autoconfigure</module>
+        <module>notifyx-store-redis</module>
         <module>notifyx-spring-boot-starter</module>
         <module>notifyx-spring-boot3-starter</module>
         <module>notifyx-channel-log</module>

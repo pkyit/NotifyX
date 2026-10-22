@@ -1,17 +1,17 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-21：K8s 邮件告警验证）
-> 交付范围：设计书 **P0/P1 的 SDK 部分**。**不是** 23 周后的 1.0 GA。
+> 更新时间：2026-10-22（iter-22：Redis 分布式去重/限流）
+> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2 起步（Redis T1）**。**不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 12 个模块，190 个测试（另有 1 个 live 冒烟默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 13 个模块，199 个测试（另有 6 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
 优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级、失败落盘与自动补偿
 **全部完成**。P0/P1 SDK 范围已收口（见 iter-17 审计）；**真实 163 SMTP 邮件已实测成功且收件人确认收到**
-（iter-18/19）；**k8s 集群内邮件告警已跑通**（iter-21，阿里云 JDK 镜像 + Secret/ConfigMap）。
-Maven Central 发布**不在要求内**；P2 起（Redis/JDBC/MQ/Admin/IM）按需推进。
+（iter-18/19）；**k8s 集群内邮件告警已跑通**（iter-21）；**Redis 分布式去重/限流已落地并在集群 Redis 6.2.23
+上验证**（iter-22）。Maven Central 发布**不在要求内**；后续按 P2 推进（跨实例聚合、JDBC、MQ）。
 
 ## 2. 已实现（按设计书章节）
 
@@ -56,12 +56,14 @@ Maven Central 发布**不在要求内**；P2 起（Redis/JDBC/MQ/Admin/IM）按�
 - [x] 管线重试/熔断 + 事件边界测试 —— iter-14（core 覆盖率 78%，门禁 76%）
 - [x] `NotifyEnvelope` 契约 + 零依赖 JSON 编解码 —— iter-15（落盘写入可还原报文）
 - [x] 失败自动补偿 —— iter-16（CAS→重投→SENT/DEAD + 退避，默认关闭；ISSUE-015 关闭）
+- [x] **T1 Redis 去重/限流（§9.4）** —— iter-22（`notifyx-store-redis`，集群 Redis 6.2.23 实测，降级内存）
+- [ ] 跨实例聚合（§9.5 T1）
 - [ ] JDBC store —— P2（信创库适配）
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
 
 ### 明确不在本次交付范围（23 周路线图后续阶段）
 
-Admin 控制台、consumer 服务、MQ 三总线、Redis / MyBatis-Plus store、钉钉 / 企微 / 飞书、
+Admin 控制台、consumer 服务、MQ 三总线、JDBC / MyBatis-Plus store、钉钉 / 企微 / 飞书、
 sms4j 适配。
 
 ## 4. 刻意偏离（详见 decisions.md）
@@ -84,16 +86,18 @@ sms4j 适配。
 | D-015 | 升级只改渠道、不改 Level | 避免升级动作悄悄绕过免打扰/限流（CRITICAL 旁路矩阵） |
 | D-016 | 升级计数包含被去重的事件 | 「未恢复」看故障持续，不看成功通知条数；否则长静默期下永远不升级 |
 | D-017 | local-file 落盘用手写扁平 JSON + 容量上限，暂不做自动重投 | core 不能引 Jackson；自动补偿需先定 NotifyEnvelope 契约 |
+| D-018 | 补偿优先 `deliverSync` 真实结果，自定义 `NotifyKit` 退化为提交成功 | 不破坏 `NotifyKit` 6 方法契约；退化路径写入文档 |
+| D-019 | Redis 故障降级内存（熔断 30s）、`size=-1` 不用 KEYS、自动装配排在管线之前 | 可用性优先；多实例降级期可能重复发送，已写入 README |
 
 ## 5. 下一步队列
 
-1. **k8s 生产化**：把 fat jar 打进自有镜像（`deploy/k8s/Dockerfile` 已就绪，需镜像仓库推送凭据），
-   用 Deployment 替代 `kubectl cp` 冒烟；`terminationGracePeriodSeconds` 建议 30s。
-2. **测试债**：core 79.8% → 90%；T1–T24 剩余用例。
-3. **P2**：Redis store（跨实例去重/限流/聚合）、JDBC store（审计+补偿，信创库 DDL）。
-4. **P3/P4**：MQ 三总线 + consumer；Admin 控制台。
-5. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
+1. **T1 跨实例聚合**：Redis INCR/HSET + `SET NX` 抢锁，窗口结束发摘要（§9.5）。
+2. **JDBC store**：审计/补偿落库，信创库 DDL（MySQL/DM/Kingbase/openGauss）。
+3. **MQ 总线**：Kafka/RabbitMQ producer + consumer（幂等键、单消费者排序）。
+4. **k8s 生产化**：自有镜像仓库 + Deployment（`deploy/k8s/Dockerfile` 已就绪）。
+5. **测试债**：core 79.8% → 90%；T1–T24 剩余用例。
+6. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
 
 ## 6. 当前分支
 
-`master`（iter-21 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
+`master`（iter-22 合并后）。工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。

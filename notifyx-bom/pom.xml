@@ -41,6 +41,11 @@
             </dependency>
             <dependency>
                 <groupId>io.github.pkyit</groupId>
+                <artifactId>notifyx-store-redis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.pkyit</groupId>
                 <artifactId>notifyx-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>

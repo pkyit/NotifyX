@@ -274,3 +274,21 @@
 - **理由**：不为了补偿而破坏 `NotifyKit` 的 6 方法契约；真实结果只在默认实现上可得，诚实标注退化路径。
 - **影响**：`handle` 返回值是源码兼容、二进制不兼容的改动（1.0.0-SNAPSHOT 阶段可接受）。
 - **复审条件**：MQ 单消费者模式落地后，补偿改由 consumer 负责，本执行器降级为本地兜底。
+
+## D-019 Redis 存储：降级优先、避免 KEYS、靠自动装配顺序让位
+
+- **日期**：2026-10-22（iter-22）
+- **状态**：生效
+- **背景**：设计书 §9.4 要求 T1 下用 Redis 做跨实例去重/限流，并明确「Redis 挂了不能导致通知发不出去」。
+- **决策**：
+  1. Redis 实现只抛异常，不吞；由 `FallbackDedupeStore`/`FallbackRateLimiter` 统一捕获并回退内存，
+     连续失败 `failure-threshold` 次后熔断 `open-duration`（默认 30s），期间不再打 Redis；
+  2. **降级期间多实例各自去重，可能重复发送**——这是可用性优先的取舍，写入 README；
+  3. `size()` 不用 `KEYS` 扫描，固定返回 -1，避免生产大 key 阻塞；
+  4. 自动装配用 `@AutoConfiguration(beforeName = NotifyxAutoConfiguration)`，
+     让后者的 `@ConditionalOnMissingBean` 正确让位；依赖 `spring-boot-starter-data-redis` 为 optional，
+     不引该模块的业务方保持 T0 零依赖；
+  5. key 统一加 `notifyx.store.redis.key-prefix`，便于共用实例隔离环境。
+- **理由**：降级语义必须在 SDK 内闭环，不能要求业务方包 try/catch；顺序问题必须在测试里固定。
+- **影响**：Redis 故障期间可能重复通知；`size()` 诊断值不可用。
+- **复审条件**：接入 Sentinel/Cluster 与密码/TLS 时，补连接级故障注入测试；跨实例聚合落地后重新评估 key 设计。
