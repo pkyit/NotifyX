@@ -68,7 +68,7 @@ public class NotifyxAspect {
         } catch (Throwable error) {
             try {
                 NotifyEvent event = buildEvent(alarmProtect.scene(), alarmProtect.level(), alarmProtect.bizId(),
-                        alarmProtect.silent(), alarmProtect.receivers(), new String[0], joinPoint, error);
+                        alarmProtect.silent(), alarmProtect.receivers(), new String[0], joinPoint, null, error);
                 notifyKit.send(event);
             } catch (Throwable ignored) {
                 log.warn("notifyx alarm advice failed silently: {}", ignored.toString());
@@ -102,7 +102,7 @@ public class NotifyxAspect {
             }
             if (shouldNotify) {
                 NotifyEvent event = buildEvent(notifyOn.scene(), notifyOn.level(), notifyOn.bizId(),
-                        notifyOn.dedupe(), notifyOn.receivers(), notifyOn.context(), joinPoint, error);
+                        notifyOn.dedupe(), notifyOn.receivers(), notifyOn.context(), joinPoint, result, error);
                 notifyKit.send(event);
             }
         } catch (Throwable ignored) {
@@ -116,7 +116,7 @@ public class NotifyxAspect {
 
     private NotifyEvent buildEvent(String scene, Level level, String bizIdExpression, String silentExpression,
                                    String[] receivers, String[] contextExpressions, ProceedingJoinPoint joinPoint,
-                                   Throwable error) {
+                                   Object result, Throwable error) {
         Map<String, Object> params = new LinkedHashMap<>();
         if (error != null) {
             params.put("exception", error.getClass().getSimpleName());
@@ -126,14 +126,14 @@ public class NotifyxAspect {
             params.put("args", joinPoint.getArgs());
         }
         for (int i = 0; i < contextExpressions.length; i++) {
-            Object value = spelEvaluator.evaluateBefore(contextExpressions[i], joinPoint);
+            Object value = spelEvaluator.evaluateAfter(contextExpressions[i], joinPoint, result, error);
             if (value != null) {
                 params.put("ctx" + i, value);
             }
         }
 
         NotifyEvent.Builder builder = NotifyEvent.builder(scene).level(level).params(params);
-        String bizId = stringOf(spelEvaluator.evaluateBefore(bizIdExpression, joinPoint));
+        String bizId = stringOf(spelEvaluator.evaluateAfter(bizIdExpression, joinPoint, result, error));
         if (!bizId.isBlank()) {
             builder.bizId(bizId);
         }

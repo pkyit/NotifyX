@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-35：渠道失败状态语义修复）
+> 更新时间：2026-10-22（iter-36：AOP SpEL 后置求值修复）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，261 测试执行 + 13 live 跳过（共 274 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，263 测试执行 + 13 live 跳过（共 276 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -15,7 +15,8 @@
 **JDBC 审计/补偿**（iter-24/30）、**Kafka/RabbitMQ 总线与双传输 consumer**（iter-25~29）均已落地并用真实中间件验证。
 iter-32 修复了 5 个可靠性缺陷（渠道异常隔离、自定义 Filter 装配、保留期删除空转、嵌套脱敏、限流计数）；
 iter-33 修复了 Webhook 嵌套 JSON、保留头覆盖与异常分类；iter-34 把模板渲染异常纳入审计/落盘/onError；
-iter-35 修正了渠道返回 `FAIL_*` 状态时的重试与熔断语义。
+iter-35 修正了渠道返回 `FAIL_*` 状态时的重试与熔断语义；iter-36 修正了 `@NotifyOn` /
+`@AlarmProtect` 的 `#r`/`#e` 求值时机。
 Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
 
 ## 2. 已实现（按设计书章节）
@@ -74,6 +75,7 @@ Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续�
 - [x] **Webhook 契约修复** —— iter-33（嵌套 JSON、保留头不可覆盖、异常统一分类、scheme/host 校验）
 - [x] **模板渲染异常失败路径** —— iter-34（审计、失败落盘、onError；不记渠道熔断）
 - [x] **渠道失败状态语义** —— iter-35（FAIL_RETRYABLE 重试、FAIL_NON_RETRYABLE 记熔断、抑制状态中立）
+- [x] **AOP SpEL 后置求值** —— iter-36（`@NotifyOn` 可用 `#r`、`@AlarmProtect` 可用 `#e`）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -122,5 +124,5 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-34 已合并；iter-35 在 `bugfix/iter-35-result-status` 完成后合并）。
+`master`（iter-35 已合并；iter-36 在 `bugfix/iter-36-spel-after` 完成后合并）。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。

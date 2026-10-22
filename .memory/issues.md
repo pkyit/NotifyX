@@ -265,3 +265,13 @@
   连续失败结果不会触发 `CIRCUIT_OPEN`。
 - **关闭方式**：按 `SUCCESS / FAIL_RETRYABLE / FAIL_NON_RETRYABLE / 抑制状态` 分支处理；
   可重试结果按 `maxAttempts` 退避重试，失败结果记熔断，抑制状态保持中立。
+
+## ISSUE-028 `@NotifyOn` / `@AlarmProtect` 的 bizId/context 用错求值时机
+- **状态**：CLOSED（iter-36）
+- **现象**：`NotifyxAspect.buildEvent()` 对 `bizId` / `context` 统一调用 `evaluateBefore`，
+  拿不到 `#r` / `#e`；`@NotifyOn(bizId="#r.id")`、`@AlarmProtect(bizId="#e.message")`
+  被 SpEL 降级为 null，且只打 WARN。
+- **证据**：`NotifyxAspectTest.shouldEvaluateResultExpressions` / `shouldEvaluateErrorExpressions`；
+  修复前 `bizId` 为空、`ctx0` 缺失。
+- **关闭方式**：`buildEvent` 增加 `result` 参数，`bizId` / `context` 改用 `evaluateAfter`；
+  `@AlarmProtect` 传 `null` result + 异常，`@NotifyOn` 传真实返回值/异常。

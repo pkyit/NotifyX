@@ -96,6 +96,25 @@ class NotifyxAspectTest {
     }
 
     @Test
+    @DisplayName("@NotifyOn：bizId/context 可读取返回值 #r")
+    void shouldEvaluateResultExpressions() {
+        service.resultNotify();
+
+        assertThat(KIT.events).hasSize(1);
+        assertThat(KIT.events.get(0).bizId()).isEqualTo("R-1");
+        assertThat(KIT.events.get(0).params()).containsEntry("ctx0", "R-1");
+    }
+
+    @Test
+    @DisplayName("@AlarmProtect：bizId 可读取异常 #e")
+    void shouldEvaluateErrorExpressions() {
+        assertThatThrownBy(() -> service.failWithError()).isInstanceOf(IllegalStateException.class);
+
+        assertThat(KIT.events).hasSize(1);
+        assertThat(KIT.events.get(0).bizId()).isEqualTo("E-1");
+    }
+
+    @Test
     @DisplayName("默认禁止 SpEL 方法调用：toString() 表达式求值失败 → 不告警、不影响业务")
     void shouldBlockSpelMethodInvocationByDefault() {
         assertThat(service.methodExpr("x")).isEqualTo("x");
@@ -182,6 +201,16 @@ class NotifyxAspectTest {
             return orderNo;
         }
 
+        @NotifyOn(scene = "RESULT_BIZ", when = "#r != null", bizId = "#r.id", context = "#r.id")
+        public Result resultNotify() {
+            return new Result("R-1");
+        }
+
+        @AlarmProtect(scene = "ALARM_ERR", bizId = "#e.message")
+        public String failWithError() {
+            throw new IllegalStateException("E-1");
+        }
+
         @NotifyOn(scene = "EXC")
         public String throwIt(String orderNo) {
             throw new IllegalArgumentException("bad");
@@ -190,6 +219,19 @@ class NotifyxAspectTest {
         @NotifyOn(scene = "METHOD", when = "#r.toString() != ''")
         public String methodExpr(String orderNo) {
             return orderNo;
+        }
+    }
+
+    static class Result {
+
+        private final String id;
+
+        Result(String id) {
+            this.id = id;
+        }
+
+        public String getId() {
+            return id;
         }
     }
 
