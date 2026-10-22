@@ -145,6 +145,30 @@ class EmailChannelTest {
         return properties;
     }
 
+    @Test
+    @DisplayName("有用户名时 Session 携带 Authenticator，Transport.send 才能提交凭据")
+    void shouldProvideCredentialsWhenUsernameConfigured() {
+        EmailChannelProperties properties = properties();
+        properties.setUsername("user@163.com");
+        properties.setPassword("auth-code");
+
+        EmailChannel channel = new EmailChannel(properties);
+        jakarta.mail.PasswordAuthentication authentication = channel.session()
+                .requestPasswordAuthentication(null, 465, "smtp", null, null);
+
+        assertThat(authentication).isNotNull();
+        assertThat(authentication.getUserName()).isEqualTo("user@163.com");
+        assertThat(authentication.getPassword()).isEqualTo("auth-code");
+    }
+
+    @Test
+    @DisplayName("无用户名时不注入凭据（匿名中继场景）")
+    void shouldNotProvideCredentialsWithoutUsername() {
+        EmailChannel channel = new EmailChannel(properties());
+
+        assertThat(channel.session().requestPasswordAuthentication(null, 25, "smtp", null, null)).isNull();
+    }
+
     private NotifyContext context(String title, String content, String receiver) {
         NotifyEvent event = NotifyEvent.builder("ORDER_CREATE_FAIL").level(Level.ERROR).bizId("SO1").build();
         return NotifyContext.builder(event)
