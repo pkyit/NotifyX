@@ -212,12 +212,12 @@ public final class NotifyPipeline {
         boolean failed = false;
         for (NotifyChannel channel : channels) {
             if (channel.supportsBatch() && receivers.size() > 1) {
-                failed |= sendOne(channel, event, renderParams, null, dedupeKey, scene);
+                failed |= sendOne(channel, event, level, renderParams, null, dedupeKey, scene);
             } else if (receivers.isEmpty()) {
-                failed |= sendOne(channel, event, renderParams, null, dedupeKey, scene);
+                failed |= sendOne(channel, event, level, renderParams, null, dedupeKey, scene);
             } else {
                 for (String receiver : receivers) {
-                    failed |= sendOne(channel, event, renderParams, receiver, dedupeKey, scene);
+                    failed |= sendOne(channel, event, level, renderParams, receiver, dedupeKey, scene);
                 }
             }
         }
@@ -227,7 +227,7 @@ public final class NotifyPipeline {
         return failed;
     }
 
-    private boolean sendOne(NotifyChannel channel, NotifyEvent event, Map<String, Object> renderParams,
+    private boolean sendOne(NotifyChannel channel, NotifyEvent event, Level level, Map<String, Object> renderParams,
                             String receiver, String dedupeKey, SceneConfig scene) {
         String traceId = resolveTraceId(event);
         String spanId = resolveSpanId(event);
@@ -278,7 +278,7 @@ public final class NotifyPipeline {
             }
         }
         Duration cost = result == null ? Duration.ZERO : result.cost();
-        audit(event, channel.name(), receiver, result, cost);
+        audit(event, level, channel.name(), receiver, result, cost);
         metrics.sendResult(channel.name(), event.scene(), result == null ? null : result.status(), cost);
         boolean failed = result != null && (result.status() == SendResult.Status.FAIL_RETRYABLE
                 || result.status() == SendResult.Status.FAIL_NON_RETRYABLE
@@ -336,7 +336,8 @@ public final class NotifyPipeline {
         }
     }
 
-    private void audit(NotifyEvent event, String channel, String receiver, SendResult result, Duration cost) {
+    private void audit(NotifyEvent event, Level level, String channel, String receiver, SendResult result,
+                       Duration cost) {
         if (auditRecorder == null) {
             return;
         }
@@ -345,7 +346,7 @@ public final class NotifyPipeline {
             maskedReceiver = masker.maskText(receiver);
         }
         try {
-            auditRecorder.record(new AuditRecord(event.eventId(), event.scene(), event.level().name(),
+            auditRecorder.record(new AuditRecord(event.eventId(), event.scene(), level.name(),
                     event.bizId(), channel, maskedReceiver,
                     result == null ? "UNKNOWN" : result.status().name(),
                     result == null ? null : result.failureReason(),
@@ -360,7 +361,7 @@ public final class NotifyPipeline {
 
     private void reject(NotifyEvent event, String reason) {
         log.debug("event rejected: scene={} reason={}", event.scene(), reason);
-        audit(event, "-", null,
+        audit(event, event.level(), "-", null,
                 SendResult.suppressed(statusFor(reason), reason), Duration.ZERO);
     }
 
@@ -370,7 +371,8 @@ public final class NotifyPipeline {
             return;
         }
         deferredHandler.defer(event, verdict.deferUntil());
-        audit(event, "-", null, SendResult.suppressed(SendResult.Status.SUPPRESSED, "deferred"), Duration.ZERO);
+        audit(event, event.level(), "-", null,
+                SendResult.suppressed(SendResult.Status.SUPPRESSED, "deferred"), Duration.ZERO);
     }
 
     private static SendResult.Status statusFor(String reason) {

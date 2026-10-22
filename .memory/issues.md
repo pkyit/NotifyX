@@ -172,3 +172,12 @@
 - **教训**：静态 mock `Transport.send` 的契约测试覆盖不到 SMTP 协议交互；认证类配置必须有
   「Session/Authenticator」层面的断言，或定期做真实/伪 SMTP 冒烟。
 - **关联**：iter-18、journal/2026-10-22。
+
+## ISSUE-017 审计记录的 level 不是生效级别
+- **状态**：CLOSED（iter-20）
+- **现象**：真实邮件验证时，场景配置 `level: ERROR`，审计输出 `level=WARN`。
+- **根因**：管线已按「事件与场景取高」算出生效级别用于渲染/优先级，但 `audit()` 写的是
+  `event.level()`（事件原始级别）。
+- **修复**：`dispatch → sendOne → audit` 传递生效级别；`reject`/`defer` 用原始级别（未进入渲染）。
+- **证据**：新增 `EffectiveLevelAuditTest` 2 个用例（场景更高 / 事件更高），修复前会失败。
+- **关联**：iter-20、journal/2026-10-22。
