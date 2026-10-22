@@ -459,9 +459,11 @@ notifyx:
 ```
 
 - Kafka key = `dedupeKey`（同事件保序），value = `NotifyEnvelope` JSON（含 schemaVersion）；
+- RabbitMQ：换 `notifyx-bus-rabbitmq` + `notifyx.bus=rabbitmq`，durable queue + publisher confirm，
+  配置在 `notifyx.bus.rabbitmq.*`（host/port/username/password/queue）；
 - 发布失败写入 `FailureStore` 兜底，不向业务抛异常；
 - `onSuccess/onError` 无法跨进程，MQ 模式下只 warn；
-- **consumer 服务尚未实现**（下一阶段），当前只能验证「发布 + 消费到报文」。
+- consumer 见下一节（Kafka 已实现；RabbitMQ consumer 待补）。
 
 ## MQ Consumer（独立服务）
 
@@ -521,9 +523,10 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**236 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
-store-jdbc 8 / bus-kafka 5 / consumer 10 / email 8 / logback 20 / webhook 12），
-另有 12 个 live 测试（Redis 8、JDBC 2、Kafka 1、邮件 1）默认跳过；CI 矩阵 JDK 17/21。
+当前基线：**240 个测试**（core 104 / spring 17 / autoconfigure 32 / store-redis 20 /
+store-jdbc 8 / bus-kafka 5 / bus-rabbitmq 4 / consumer 10 / email 8 / logback 20 / webhook 12），
+另有 13 个 live 测试（Redis 8、JDBC 2、Kafka 1、RabbitMQ 1、邮件 1）默认跳过；
+CI 矩阵 JDK 17/21。
 
 ## 发布
 

@@ -375,3 +375,18 @@
 - **理由**：幂等是去重优化，不是投递前置条件；fail-open 与「重复发比不发好」一致。
 - **影响**：Redis/JDBC 故障期间可能重复通知；`nx_idempotency` 暂无过期清理，需要运维/后续任务。
 - **复审条件**：多实例 consumer 上线前补 retention SQL；若有「绝不重复」硬要求，改为 fail-closed。
+
+## D-025 RabbitMQ producer：单 channel 串行 + publisher confirm，暂不做 DLX
+
+- **日期**：2026-10-22（iter-28）
+- **状态**：生效
+- **背景**：§11.2 要求 RabbitMQ 保序/退避/幂等；producer 侧只需可靠发布。
+- **决策**：
+  1. 直接用 `amqp-client`，不引 Spring AMQP，保持 bus 模块轻量；
+  2. `Channel` 非线程安全 → publish 串行化；懒连接，broker 暂不可用不影响应用启动；
+  3. durable queue + `deliveryMode=2` + `messageId=dedupeKey`，`confirmSelect` 后
+     `waitForConfirmsOrDie`；失败关闭连接并抛 `BusException`；
+  4. 死信/多级 TTL 队列属于 consumer 侧重试设计，producer 暂不声明 DLX。
+- **理由**：producer-only 阶段只保证「可靠发出 + 失败落盘」；退避/死信由 consumer 统一处理。
+- **影响**：串行 publish 吞吐低于多 channel；confirm 同步等待会增加延迟（默认 5s 超时）。
+- **复审条件**：高吞吐场景改为 channel 池/ThreadLocal + 异步 confirm；consumer 落地时补 DLX 声明。

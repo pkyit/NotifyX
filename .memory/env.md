@@ -119,7 +119,17 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 | 测试 | `NOTIFYX_KAFKA_BOOTSTRAP=127.0.0.1:19092 mvn -pl notifyx-bus-kafka -am test -Dtest=KafkaBusLiveTest` → 1/1 |
 | 注意 | 单节点 replication=1，仅用于验证；生产需多副本/多 broker |
 
-## 10. CI 矩阵（§17.4）
+## 10. RabbitMQ（iter-28 实测）
+
+| 项 | 值 |
+| --- | --- |
+| 部署 | `deploy/k8s/rabbitmq.yaml`，namespace `notifyx-infra`（Running，k8s-node2） |
+| 镜像 | `registry.cn-hangzhou.aliyuncs.com/pkyit/rabbitmq:3.13.0` |
+| 连接 | `kubectl -n notifyx-infra port-forward svc/rabbitmq 15672:5672` |
+| 测试 | `NOTIFYX_RABBITMQ_HOST=127.0.0.1 NOTIFYX_RABBITMQ_PORT=15672 mvn -pl notifyx-bus-rabbitmq -am test -Dtest=RabbitMqBusLiveTest` → 1/1 |
+| 注意 | 默认 guest/guest；生产需独立用户/vhost 与 TLS |
+
+## 11. CI 矩阵（§17.4）
 
 `.github/workflows/ci.yml`：Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
 当前仓库托管在 Gitee，GitHub Actions 不会自动触发；Gitee Go 可直接执行 `mvn -B -ntp verify`。
