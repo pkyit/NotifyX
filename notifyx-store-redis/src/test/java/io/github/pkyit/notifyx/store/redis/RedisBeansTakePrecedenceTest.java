@@ -49,4 +49,34 @@ class RedisBeansTakePrecedenceTest {
                             .isInstanceOf(io.github.pkyit.notifyx.core.support.MemoryRateLimiter.class);
                 });
     }
+
+    @Test
+    @DisplayName("notifyx.aggregate.enabled=true 且有 Redis 时使用跨实例聚合")
+    void redisAggregatorShouldWinWhenEnabled() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        RedisStoresAutoConfiguration.class, NotifyxAutoConfiguration.class))
+                .withBean(org.springframework.data.redis.core.StringRedisTemplate.class,
+                        () -> mock(org.springframework.data.redis.core.StringRedisTemplate.class))
+                .withPropertyValues("notifyx.aggregate.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(io.github.pkyit.notifyx.core.pipeline.EventAggregator.class))
+                            .isInstanceOf(RedisAggregator.class);
+                });
+    }
+
+    @Test
+    @DisplayName("开启聚合但没有 Redis 时仍用 T0 聚合器")
+    void t0AggregatorShouldRemainWithoutRedis() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        RedisStoresAutoConfiguration.class, NotifyxAutoConfiguration.class))
+                .withPropertyValues("notifyx.aggregate.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(io.github.pkyit.notifyx.core.pipeline.EventAggregator.class))
+                            .isInstanceOf(io.github.pkyit.notifyx.core.pipeline.Aggregator.class);
+                });
+    }
 }

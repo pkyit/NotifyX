@@ -71,7 +71,7 @@ public final class NotifyPipeline {
     private final Map<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final CircuitConfig circuitConfig;
     private final TraceContext traceContext;
-    private final Aggregator aggregator;
+    private final EventAggregator aggregator;
     private final EscalationPolicy escalation;
 
     /**
@@ -563,7 +563,7 @@ public final class NotifyPipeline {
         private DeferredHandler deferredHandler;
         private CircuitConfig circuitConfig = CircuitConfig.defaults();
         private TraceContext traceContext = TraceContext.none();
-        private Aggregator aggregator;
+        private EventAggregator aggregator;
         private EscalationPolicy escalation;
 
         private Builder() {
@@ -661,7 +661,7 @@ public final class NotifyPipeline {
          * @param aggregator 聚合器
          * @return 构建器
          */
-        public Builder aggregator(Aggregator aggregator) {
+        public Builder aggregator(EventAggregator aggregator) {
             this.aggregator = aggregator;
             return this;
         }

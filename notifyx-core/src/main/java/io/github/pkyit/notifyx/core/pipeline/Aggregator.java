@@ -25,8 +25,8 @@ import io.github.pkyit.notifyx.core.model.NotifyEvent;
  * T0 实例内聚合（设计书 §9.5）：把窗口内被去重的事件收拢成一条摘要。
  *
  * <p><b>能力边界必须诚实</b>：没有 Redis/MQ 时聚合只在<b>单实例内</b>生效，
- * 多实例部署下每个实例各发一条摘要；跨实例聚合属于 T1/T2（Redis {@code INCR} 或
- * consumer 侧聚合），不在本次实现范围。</p>
+ * 多实例部署下每个实例各发一条摘要；跨实例聚合由 {@code notifyx-store-redis} 的
+ * {@code RedisAggregator} 提供（T1），MQ consumer 侧聚合属 P3。</p>
  *
  * <p>窗口结束时通过 {@link #sink(Consumer)} 注入的出口（通常是管线自身）投递一条摘要事件，
  * 摘要带唯一 {@code dedupeKey}，因此不会被去重吞掉。</p>
@@ -36,7 +36,7 @@ import io.github.pkyit.notifyx.core.model.NotifyEvent;
  *
  * @since 1.0
  */
-public final class Aggregator implements AutoCloseable {
+public final class Aggregator implements EventAggregator {
 
     private static final Logger log = LoggerFactory.getLogger(Aggregator.class);
 
