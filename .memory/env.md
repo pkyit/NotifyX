@@ -99,7 +99,17 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 | 测试 | `NOTIFYX_REDIS_HOST=127.0.0.1 NOTIFYX_REDIS_PORT=16379 mvn -pl notifyx-store-redis test -Dtest=RedisStoresLiveTest` → 5/5 |
 | 注意 | demo 未设密码；生产需密码/TLS/Sentinel 或 Cluster，并限制网络访问 |
 
-## 8. CI 矩阵（§17.4）
+## 8. 数据库（iter-24 实测）
+
+| 项 | 值 |
+| --- | --- |
+| MySQL | `10.10.10.102:3306`，8.0.46；测试库 `notifyx_test`（root/密码见交付方，不入库） |
+| PostgreSQL | `10.10.10.102:5432`，16.15；测试库 `notifyx_test`（postgres/密码见交付方，不入库） |
+| 验证 | `JdbcStoresLiveTest` 在 MySQL 与 PostgreSQL 各 2/2 通过（审计写入、失败记录 CAS/requeue） |
+| DDL | `notifyx-store-jdbc/src/main/resources/sql/{mysql,postgresql,h2}/schema.sql` |
+| 注意 | 测试库仅用于验证；生产需建独立 schema/用户并做权限最小化 |
+
+## 9. CI 矩阵（§17.4）
 
 `.github/workflows/ci.yml`：Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
 当前仓库托管在 Gitee，GitHub Actions 不会自动触发；Gitee Go 可直接执行 `mvn -B -ntp verify`。
