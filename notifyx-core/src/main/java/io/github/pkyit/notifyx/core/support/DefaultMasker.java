@@ -1,6 +1,8 @@
 package io.github.pkyit.notifyx.core.support;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -19,6 +21,7 @@ import io.github.pkyit.notifyx.core.spi.Masker;
 public final class DefaultMasker implements Masker {
 
     private static final String MASK = "****";
+    private static final int MAX_DEPTH = 10;
     private static final Set<String> PHONE_KEYS = Set.of("phone", "mobile", "tel", "receiver");
     private static final Set<String> EMAIL_KEYS = Set.of("email", "mail");
     private static final Set<String> ID_CARD_KEYS = Set.of("idcard", "idno", "certno");
@@ -62,16 +65,6 @@ public final class DefaultMasker implements Masker {
     }
 
     @Override
-    public Map<String, Object> maskParams(Map<String, Object> params) {
-        if (params == null || params.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, Object> masked = new LinkedHashMap<>();
-        params.forEach((key, value) -> masked.put(key, maskValue(key, value)));
-        return masked;
-    }
-
-    @Override
     public String maskText(String text) {
         if (text == null || text.isEmpty()) {
             return text;
@@ -79,7 +72,35 @@ public final class DefaultMasker implements Masker {
         return ID_CARD_PATTERN.matcher(text).replaceAll("$1***********$2");
     }
 
-    private Object maskValue(String key, Object value) {
+    @Override
+    public Map<String, Object> maskParams(Map<String, Object> params) {
+        if (params == null || params.isEmpty()) {
+            return Map.of();
+        }
+        return maskMap(params, 0);
+    }
+
+    private Map<String, Object> maskMap(Map<?, ?> params, int depth) {
+        Map<String, Object> masked = new LinkedHashMap<>();
+        params.forEach((key, value) -> {
+            String name = key == null ? null : String.valueOf(key);
+            masked.put(name, maskValue(name, value, depth + 1));
+        });
+        return masked;
+    }
+
+    private Object maskValue(String key, Object value, int depth) {
+        if (value instanceof Map<?, ?> nested) {
+            return depth >= MAX_DEPTH ? MASK : maskMap(nested, depth);
+        }
+        if (value instanceof Iterable<?> iterable) {
+            if (depth >= MAX_DEPTH) {
+                return MASK;
+            }
+            List<Object> masked = new ArrayList<>();
+            iterable.forEach(item -> masked.add(maskValue(key, item, depth + 1)));
+            return masked;
+        }
         if (!(value instanceof String text) || key == null) {
             return value;
         }

@@ -134,3 +134,13 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 
 `.github/workflows/ci.yml`：Temurin 17 / 21，`fail-fast: false`（缺中间件不得启动失败，承诺 P1）。
 当前仓库托管在 Gitee，GitHub Actions 不会自动触发；Gitee Go 可直接执行 `mvn -B -ntp verify`。
+
+## 12. DSH 沙箱构建注意（iter-32 实测）
+
+| 项 | 事实 |
+| --- | --- |
+| 现象 | DSH `pwsh` 沙箱里直接 `mvn clean verify`，`notifyx-store-redis` 的 Mockito 用例失败：`Could not initialize inline Byte Buddy mock maker ... does not supply a working agent attachment mechanism` |
+| 根因 | Byte Buddy 默认起外部 JVM 做 self-attach，沙箱禁止管道/进程附加；不是代码缺陷 |
+| 解决 | 运行前设置 `$env:JDK_JAVA_OPTIONS='-Djdk.attach.allowAttachSelf=true'`，让 fork 内部自附加 |
+| 验证 | 加该变量后 store-redis 27 用例通过（7 live 跳过）；全量 verify 结果见 iter-32 |
+| Git | 本沙箱里 `git pull` / `git push` 可能因 `ssh.exe` 无法创建 signal pipe 失败；提交先在本地完成，推送需在普通终端执行 |

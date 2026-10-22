@@ -314,6 +314,8 @@ public EventFilter debugOnlyFilter() {
 }
 ```
 
+定义成 Spring Bean 即自动接入责任链，按 `order()` 升序执行；内置过滤器占用 100–600，`900+` 保留给业务方。
+
 ## 当前版本范围（v1.0.0-SNAPSHOT）
 
 已实现（对应设计书 P0/P1 的 SDK 部分）：

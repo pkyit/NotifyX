@@ -46,8 +46,20 @@ public final class MemoryRateLimiter implements RateLimiter {
 
     @Override
     public long currentCount(String key, Duration window) {
-        Deque<Long> deque = windows.get(key);
-        return deque == null ? 0L : deque.size();
+        long now = System.currentTimeMillis();
+        long windowMillis = Math.max(1L, window.toMillis());
+        long[] count = {0L};
+        windows.computeIfPresent(key, (k, deque) -> {
+            while (!deque.isEmpty() && now - deque.peekFirst() >= windowMillis) {
+                deque.pollFirst();
+            }
+            if (deque.isEmpty()) {
+                return null;
+            }
+            count[0] = deque.size();
+            return deque;
+        });
+        return count[0];
     }
 
     /**

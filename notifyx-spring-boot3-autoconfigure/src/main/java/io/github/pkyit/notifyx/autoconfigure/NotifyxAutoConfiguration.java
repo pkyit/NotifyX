@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -318,6 +319,7 @@ public class NotifyxAutoConfiguration {
      * @param metrics 指标
      * @param taskExecutor 执行器
      * @param traceContext trace 读取口
+     * @param customFilters 用户自定义过滤器
      * @param environment 环境
      * @return 门面
      */
@@ -338,8 +340,11 @@ public class NotifyxAutoConfiguration {
                                       TraceContext traceContext,
                                       EventAggregator aggregator,
                                       EscalationPolicy escalation,
+                                      ObjectProvider<EventFilter> customFilters,
                                       Environment environment) {
         List<EventFilter> filters = buildFilters(properties, dedupeStore, rateLimiter);
+        customFilters.orderedStream().forEach(filters::add);
+        filters.sort(Comparator.comparingInt(EventFilter::order));
         NotifyPipeline pipeline = NotifyPipeline.builder()
                 .sceneRegistry(notifyxSceneRegistry(properties))
                 .filters(filters)
