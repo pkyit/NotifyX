@@ -345,3 +345,18 @@
 - **理由**：producer 只做传输，语义裁决集中在 consumer；门面替换比在 pipeline 内加分支更少侵入。
 - **影响**：MQ 模式下本地 `notifyx.filters`/场景渠道配置不生效；consumer 必须持有同一套配置。
 - **复审条件**：consumer 落地后，评估是否需要在 producer 侧保留「全局静默/紧急刹车」。
+
+## D-023 Consumer 单实例起步，幂等先内存后 Redis/JDBC
+
+- **日期**：2026-10-22（iter-26）
+- **状态**：生效
+- **背景**：§11.4 要求 consumer 幂等；单实例天然无重复，多实例/重启需要持久化幂等。
+- **决策**：
+  1. consumer 先做**单实例**，`notifyx.async.enabled=false`，按分区同步处理保序；
+  2. 幂等先用内存 TTL（24h）+ 容量上限，重启失效；文档明确警告；
+  3. 坏报文解码失败只记录并 ACK（毒消息不阻塞分区），死信/重试留到后续；
+  4. 幂等键用 `NotifyEnvelope.idempotencyKey`（producer 侧为 eventId）；
+  5. Redis `SET NX` / `nx_idempotency` 表实现作为下一轮，接口 `IdempotencyStore` 已留出。
+- **理由**：先验证「MQ 重复投递只发一次」的完整链路；持久化幂等涉及存储选型与清理策略。
+- **影响**：consumer 重启/多实例时可能重复通知；生产需尽快切换 Redis/JDBC 实现。
+- **复审条件**：consumer 需要水平扩展或不能接受重启重复时，立即补持久化幂等与分区消费。

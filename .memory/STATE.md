@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-25：Kafka producer / MQ 模式）
-> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3 起步（Kafka producer）**。
+> 更新时间：2026-10-22（iter-26：Kafka consumer）
+> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka producer/consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 15 个模块，226 个测试（另有 11 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 16 个模块，232 个测试（另有 11 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -61,7 +61,8 @@
 - [x] **T1 跨实例聚合（§9.5）** —— iter-23（Redis Hash 计数 + `SET NX` 抢锁，真实 Redis 两实例只发一条）
 - [x] **JDBC 审计/失败补偿（§12.2）** —— iter-24（MySQL 8.0 / PostgreSQL 16 实测；纯 JDBC，D-021）
 - [x] **Kafka producer（§11，producer-only）** —— iter-25（`notifyx-bus-kafka`，集群 Kafka 4.3.1 发布/消费实测）
-- [ ] Kafka consumer 服务（幂等 + 完整责任链 + ACK/死信）
+- [x] **Kafka consumer（§11.4）** —— iter-26（`notifyx-consumer` 单实例，内存幂等，真实 Kafka 重复投递只发一次）
+- [ ] consumer 持久化幂等（Redis `SET NX` / `nx_idempotency`）与多实例分区消费
 - [ ] RabbitMQ bus（镜像已具备）
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与审计容量治理
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
