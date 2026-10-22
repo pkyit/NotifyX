@@ -1,6 +1,5 @@
 package io.github.pkyit.notifyx.consumer;
 
-import javax.sql.DataSource;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -48,13 +47,13 @@ public class ConsumerConfiguration {
     /**
      * JDBC 幂等（T1）。
      *
-     * @param dataSource 数据源
+     * @param properties 配置
      * @return 幂等存储
      */
     @Bean
     @ConditionalOnProperty(prefix = "notifyx.consumer", name = "idempotency-store", havingValue = "jdbc")
-    @ConditionalOnBean(DataSource.class)
-    public IdempotencyStore jdbcIdempotencyStore(DataSource dataSource) {
-        return new JdbcIdempotencyStore(dataSource);
+    public IdempotencyStore jdbcIdempotencyStore(ConsumerProperties properties) {
+        return new JdbcIdempotencyStore(properties.getJdbcUrl(), properties.getJdbcUser(),
+                properties.getJdbcPassword());
     }
 }

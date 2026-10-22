@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-28：RabbitMQ producer）
-> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、Kafka consumer）**。
+> 更新时间：2026-10-22（iter-29：RabbitMQ consumer）
+> 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，240 个测试（另有 13 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，242 个测试（另有 13 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -64,7 +64,8 @@
 - [x] **Kafka consumer（§11.4）** —— iter-26（`notifyx-consumer` 单实例，内存幂等，真实 Kafka 重复投递只发一次）
 - [x] **Consumer 持久化幂等** —— iter-27（Redis SET NX / JDBC 唯一键三档可配，真实 Redis 实测）
 - [x] **RabbitMQ producer（§11.2）** —— iter-28（`notifyx-bus-rabbitmq`，durable+confirm，真实 RabbitMQ 实测）
-- [ ] RabbitMQ consumer / 死信队列
+- [x] **RabbitMQ consumer（§11.4）** —— iter-29（transport=kafka|rabbitmq 切换，真实 RabbitMQ 重复投递只发一次）
+- [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与审计容量治理
 - [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
