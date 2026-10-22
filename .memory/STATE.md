@@ -1,18 +1,19 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-22（iter-30：审计保留期清理）
+> 更新时间：2026-10-22（iter-31：P2+ 目标审计通过）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，244 个测试（另有 13 个 live 测试默认跳过）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，244 测试执行 + 13 live 跳过（共 257 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
 责任链管线、三渠道、L0/L2/L3 接入、Trace、自动装配、发布链路、质量门禁、
 优雅关闭、actuator health、启动诊断表、双 starter 坐标、T0 聚合与升级、失败落盘与自动补偿
 **全部完成**。P0/P1 SDK 范围已收口（见 iter-17 审计）；**真实 163 SMTP 邮件已实测成功且收件人确认收到**
-（iter-18/19）；**k8s 集群内邮件告警已跑通**（iter-21）；**Redis 分布式去重/限流已落地并在集群 Redis 6.2.23
-上验证**（iter-22）。Maven Central 发布**不在要求内**；后续按 P2 推进（跨实例聚合、JDBC、MQ）。
+（iter-18/19）；**k8s 集群内邮件告警已跑通**（iter-21）；**Redis 分布式去重/限流与跨实例聚合**（iter-22/23）、
+**JDBC 审计/补偿**（iter-24/30）、**Kafka/RabbitMQ 总线与双传输 consumer**（iter-25~29）均已落地并用真实中间件验证。
+Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
 
 ## 2. 已实现（按设计书章节）
 
