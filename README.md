@@ -324,6 +324,8 @@ public EventFilter debugOnlyFilter() {
 - 失败落盘：内存（默认）/ 本地文件（按小时分片、JSON、乐观锁、磁盘上限保护，重启不丢）
 - T1（可选）：`notifyx-store-redis` 提供 Redis 分布式去重（SET NX EX）与滑动窗限流（Lua），
   Redis 故障自动降级内存（降级期间多实例可能重复发送）
+- JDBC（可选）：`notifyx-store-jdbc` 提供审计落库与 JDBC 失败补偿（乐观锁 CAS），
+  已在 MySQL 8.0 / PostgreSQL 16 实测；DM/Kingbase 的 DDL 适配尚未验证
 - 聚合：T0 实例内窗口聚合（默认）；有 Redis 且 `notifyx.aggregate.enabled=true` 时自动切到
   T1 跨实例聚合（Redis Hash 计数 + `SET NX` 抢锁，只有一个实例发摘要）
 - 升级：同场景连续 N 次（窗口内）后改走 `upgrade-to` 渠道，支持恢复场景/成功清零
@@ -405,6 +407,34 @@ spring:
 - 验证：`deploy/k8s/redis.yaml` 起 Redis，设置 `NOTIFYX_REDIS_HOST`/`NOTIFYX_REDIS_PORT` 后运行
   `RedisStoresLiveTest`。
 
+## JDBC 审计与失败补偿（可选）
+
+```xml
+<dependency>
+  <groupId>io.github.pkyit</groupId>
+  <artifactId>notifyx-store-jdbc</artifactId>
+</dependency>
+```
+
+```yaml
+notifyx:
+  audit:
+    store: jdbc          # none（默认）| jdbc
+  fallback:
+    store: jdbc          # memory（默认）| file | jdbc
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/notifyx
+    username: ...
+    password: ...
+```
+
+- 建表脚本：`notifyx-store-jdbc/src/main/resources/sql/{mysql,postgresql,h2}/schema.sql`；
+  DM/Kingbase 需按 §12.4 的方言清单单独适配（尚未验证）。
+- `nx_audit` 写失败只 warn，不影响发送；`nx_failure_record` 用 `version` 乐观锁 CAS，
+  与文件/内存实现共用同一状态机。
+- 已在真实 MySQL 8.0.46 与 PostgreSQL 16.15 上跑通审计写入与失败记录 CRUD。
+
 ## 真实邮件冒烟（可选）
 
 `EmailLiveSmokeTest` 只在环境变量齐备时执行，默认跳过（CI 无凭据）。它会**真实发送邮件**：
@@ -445,9 +475,9 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**210 个测试**（core 101 / spring 17 / autoconfigure 32 / store-redis 20 /
-email 8 / logback 20 / webhook 12），另有 7 个 live 测试（Redis 7、邮件 1）默认跳过；
-CI 矩阵 JDK 17/21。
+当前基线：**218 个测试**（core 101 / spring 17 / autoconfigure 32 / store-redis 20 /
+store-jdbc 8 / email 8 / logback 20 / webhook 12），另有 9 个 live 测试
+（Redis 7、JDBC 2、邮件 1）默认跳过；CI 矩阵 JDK 17/21。
 
 ## 发布
 

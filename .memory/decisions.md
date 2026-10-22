@@ -311,3 +311,20 @@
 - **理由**：跨实例摘要重复比丢失更扰民；崩溃补发需要额外协调机制，收益不足以抵消复杂度。
 - **影响**：极端情况下（全部相关实例在窗口结束前崩溃）会丢一条摘要；日志只 warn。
 - **复审条件**：若运维反馈「聚合丢失」不可接受，再引入消费者侧聚合（T2/MQ）或定时扫描。
+
+## D-021 JDBC 存储先用纯 JDBC，不引 MyBatis-Plus
+
+- **日期**：2026-10-22（iter-24）
+- **状态**：生效（偏离设计模块名 `store-mybatisplus`）
+- **背景**：设计 §5.4 规划 `store-mybatisplus`（core + mybatis-plus + JDBC），但当前只做
+  `nx_audit` 与 `nx_failure_record` 两张表；MyBatis-Plus 会引入版本耦合与方言适配面，
+  而信创适配要求驱动作 optional、各库独立 DDL。
+- **决策**：
+  1. 新增 `notifyx-store-jdbc`，用标准 JDBC + `DataSource`，不依赖 MyBatis-Plus/Spring JDBC；
+  2. SQL 只用 `insert/update/select ... limit` 等标准语法，`version` 字段做乐观锁 CAS；
+  3. 审计主键在应用侧生成随机 63 位正数，避免各库自增/序列差异；
+  4. DDL 按 `mysql/`、`postgresql/`、`h2/` 分目录；DM/Kingbase 待后续按 §12.4 适配；
+  5. 审计容量治理（retention/sampling/batch）尚未实现，保留设计字段。
+- **理由**：先把契约、乐观锁、真实库验证跑通；MyBatis-Plus 版可作为增强模块，不必现在承担耦合。
+- **影响**：没有 MP 的分页/方言自动适配；审计高写入量下的批量/保留策略需要后续补。
+- **复审条件**：需要 Admin 分页查询/多表 CRUD 时，再评估引入 `store-mybatisplus`。
