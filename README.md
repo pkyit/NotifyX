@@ -535,7 +535,7 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**257 个测试**（core 110 / spring 17 / autoconfigure 33 / store-redis 20 /
+当前基线：**261 个测试**（core 114 / spring 17 / autoconfigure 33 / store-redis 20 /
 store-jdbc 11 / bus-kafka 5 / bus-rabbitmq 4 / consumer 12 / email 8 / logback 20 / webhook 17），
 另有 13 个 live 测试（Redis 8、JDBC 2、Kafka 1、RabbitMQ 1、邮件 1）默认跳过；
 CI 矩阵 JDK 17/21。
