@@ -1,7 +1,8 @@
 # iter-22 · Redis 分布式去重/限流（T1 能力梯度）
 
 - **日期**：2026-10-22
-- **分支**：`feature/redis-store` → `master`
+- **分支**：`feature/redis-store`（**过程失误**：实际提交直接落在 `master`，事后补建同名指针；
+  未重写已推送历史，记录在 journal 的 Git 习惯一节）
 - **类型**：feat（P2 第一块：Redis 存储）
 - **关联**：D-019（新增）、journal/2026-10-22、deploy/k8s/redis.yaml
 
