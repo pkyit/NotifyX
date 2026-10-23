@@ -52,6 +52,9 @@ public final class RetryPolicy {
     /**
      * 计算某渠道的最大尝试次数。
      *
+     * <p>全局 {@code maxAttempts} 是上限：渠道的 {@code maxRetries()} 只能进一步降低，
+     * 不能突破；场景级 {@code retry} 仍可在管线里继续下调。</p>
+     *
      * @param channel 渠道，可为 null
      * @return 尝试次数
      */
@@ -60,7 +63,7 @@ public final class RetryPolicy {
             return maxAttempts;
         }
         int channelAttempts = channel.maxRetries();
-        return channelAttempts <= 0 ? maxAttempts : channelAttempts;
+        return channelAttempts <= 0 ? maxAttempts : Math.min(maxAttempts, channelAttempts);
     }
 
     /**

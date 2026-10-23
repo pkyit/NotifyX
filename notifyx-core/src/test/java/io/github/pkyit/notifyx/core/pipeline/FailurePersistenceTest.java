@@ -34,16 +34,7 @@ class FailurePersistenceTest {
     @Test
     @DisplayName("投递失败时落盘的 envelope 可还原出原事件")
     void shouldPersistDecodableEnvelope() {
-        NotifyPipeline pipeline = NotifyPipeline.builder()
-                .sceneRegistry(SceneRegistry.of(Map.of("SCENE_A",
-                        SceneConfig.builder("SCENE_A").channels(List.of("failing")).build()),
-                        SceneRegistry.emptyDefaults()))
-                .channelRegistry(ChannelRegistry.of(List.of(new FailingChannel())))
-                .templateEngine(new SimpleTemplateEngine())
-                .templates(Map.of("default", new MessageTemplate("default", "t", "${content}")))
-                .failureStore(store)
-                .retryPolicy(new RetryPolicy(1, Duration.ofMillis(1), Duration.ofMillis(5), 0.0))
-                .build();
+        NotifyPipeline pipeline = pipeline(1);
 
         pipeline.handle(NotifyEvent.builder("SCENE_A")
                 .level(Level.ERROR)
@@ -60,6 +51,33 @@ class FailurePersistenceTest {
         assertThat(envelope.params()).containsEntry("reason", "库存不足");
         assertThat(envelope.attempts()).isEqualTo(1);
         assertThat(envelope.toEvent().scene()).isEqualTo("SCENE_A");
+    }
+
+    @Test
+    @DisplayName("失败落盘 attempts 记录真实尝试次数，而不是配置上限")
+    void shouldPersistActualAttempts() {
+        NotifyPipeline pipeline = pipeline(3);
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A").level(Level.ERROR).bizId("B1").build());
+
+        assertThat(store.records).hasSize(1);
+        FailedRecord record = store.records.get(0);
+        assertThat(record.attempts()).isEqualTo(3);
+        NotifyEnvelope envelope = NotifyEnvelopeCodec.fromJson(record.envelopeJson());
+        assertThat(envelope.attempts()).isEqualTo(3);
+    }
+
+    private NotifyPipeline pipeline(int maxAttempts) {
+        return NotifyPipeline.builder()
+                .sceneRegistry(SceneRegistry.of(Map.of("SCENE_A",
+                        SceneConfig.builder("SCENE_A").channels(List.of("failing")).build()),
+                        SceneRegistry.emptyDefaults()))
+                .channelRegistry(ChannelRegistry.of(List.of(new FailingChannel())))
+                .templateEngine(new SimpleTemplateEngine())
+                .templates(Map.of("default", new MessageTemplate("default", "t", "${content}")))
+                .failureStore(store)
+                .retryPolicy(new RetryPolicy(maxAttempts, Duration.ofMillis(1), Duration.ofMillis(5), 0.0))
+                .build();
     }
 
     private static final class RecordingFailureStore implements FailureStore {

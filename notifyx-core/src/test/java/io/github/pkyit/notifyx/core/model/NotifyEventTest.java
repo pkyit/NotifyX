@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
@@ -85,6 +86,18 @@ class NotifyEventTest {
         NotifyEvent event = NotifyEvent.builder("SCENE_A").param("a", level1).build();
 
         assertThat(String.valueOf(event.params().get("a"))).contains("d=v");
+    }
+
+    @Test
+    @DisplayName("数组参数归一为不可变 List，避免 identity hash 进入指纹")
+    void shouldNormalizeArrayParams() {
+        NotifyEvent event = NotifyEvent.builder("SCENE_A")
+                .param("args", new Object[]{"SO1", 2})
+                .param("ids", new int[]{7, 8})
+                .build();
+
+        assertThat(event.params().get("args")).isEqualTo(List.of("SO1", 2));
+        assertThat(event.params().get("ids")).isEqualTo(List.of(7, 8));
     }
 
     @Test

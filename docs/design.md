@@ -1469,6 +1469,8 @@ delay(attempt) = min(baseDelay × 2^(attempt-1), maxDelay) × (0.5 + random(0, 0
 ```
 
 - `baseDelay` 取渠道的 `retryBackoff()`（默认 2s）
+- `maxAttempts = min(notifyx.retry.max-attempts, 渠道 maxRetries())`：全局配置是上限，
+  渠道只能进一步降低（如短信降到 1）；场景 `retry > 0` 时再取更小值
 - `maxDelay` 默认 60s
 - **抖动系数 0.5~1.0**：不加抖动时，100 个实例的重试会在同一时刻打向同一个渠道，形成二次风暴
 

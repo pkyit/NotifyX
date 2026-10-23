@@ -303,3 +303,44 @@
 - **证据**：`RedisAggregatorTest.shouldReleaseLockAfterFlush`；修复前锁 key 没有删除路径。
 - **关闭方式**：锁值改为每次 flush 的 UUID token，`finally` 中 Lua compare-and-delete
   释放；TTL 仍作为崩溃兜底。
+
+## ISSUE-032 `@AlarmProtect` 的 `args` 数组退化为 identity hash，重复失败不去重
+- **状态**：CLOSED（iter-40）
+- **现象**：同一 scene、同一 `bizId`、同一异常、同一业务参数，在 30s 静默窗口内连续触发两次，
+  仍发出两条 `ORDER_CREATE_FAIL`；审计没有 `DEDUPED`。两条 webhook 的
+  `params.args` 分别是 `[Ljava.lang.Object;@6e05e3e8`、`[Ljava.lang.Object;@4c9c43b3`。
+- **证据**：外部 demo `notifyx-demo` TC-05（连续两次执行复现）；
+  新增 `NotifyPipelineTest.arrayParamsDoNotBreakDedupe`、
+  `NotifyAspectTest.shouldProduceStableFingerprintForRepeatedArgs`、
+  `FingerprintsTest.shouldCanonicalizeArrays`；修复前分别得到 2 次投递 / 不同指纹。
+- **根因**：`NotifyxAspect.buildEvent()` 把 `joinPoint.getArgs()` 原样放进 params；
+  `NotifyEvent.normalizeValue()` 对数组走 `String.valueOf(Object)`（identity hash）；
+  `Fingerprints` 再把该值计入 `md5(sorted(params))`。
+- **关闭方式**：`NotifyEvent` 对数组逐元素递归归一化为不可变 List；
+  `Fingerprints.canonicalValue` 对数组使用与 Collection 相同的 `[a,b]` 格式；
+  数组参数与等值 List 现在产生同一指纹。
+
+## ISSUE-033 审计与失败落盘的 attempts 不是真实重试次数
+- **状态**：CLOSED（iter-40）
+- **现象**：webhook 实际尝试 3 次（注入 3 次 503，`costMs=3280`），审计却是
+  `status=FAIL_RETRYABLE attempts=1`；`persistFailure()` 又把 `maxAttempts`
+  写进 envelope/失败记录，非重试失败（如认证错误 1 次即放弃）会被记成配置上限。
+- **证据**：外部 demo TC-08 日志；新增
+  `NotifyPipelineRetryTest.shouldAuditActualAttemptsAfterRetriesExhausted` /
+  `shouldRetryUntilSuccess`、`FailurePersistenceTest.shouldPersistActualAttempts`。
+- **根因**：`NotifyPipeline.audit()` 里 `result == null ? 0 : 1` 硬编码；
+  `sendOne()` 调 `persistFailure(..., maxAttempts, ...)` 而不是实际尝试次数。
+- **关闭方式**：发送循环维护 `attemptsUsed`（仅在真正调用渠道时递增），
+  审计与失败记录都落真实值；熔断打开为 0，模板预发送失败为 0，
+  Filter 拒绝为 0。
+
+## ISSUE-034 全局 `notifyx.retry.max-attempts` 对内置渠道无效
+- **状态**：CLOSED（iter-40）
+- **现象**：配置 `max-attempts: 2`、`base-delay: 200ms`，webhook 失败仍按渠道默认
+  3 次 / 2s 退避执行（3280ms）。
+- **证据**：外部 demo TC-08；新增 `RetryPolicyTest.shouldCapAttemptsByGlobalMaximum`。
+- **根因**：`RetryPolicy.attemptsFor()` 在 `channel.maxRetries() > 0` 时直接返回渠道值；
+  内置 `NotifyChannel.maxRetries()` 默认 3，全局配置永远用不上。
+- **关闭方式**：改为 `min(全局 maxAttempts, 渠道 maxRetries)`；渠道仍可降到 1，
+  场景 `retry > 0` 再取更小值。`base-delay` 按设计书 §9.8 继续由渠道
+  `retryBackoff()` 决定（内置渠道默认 2s），README 与 design §9.8 已写明。

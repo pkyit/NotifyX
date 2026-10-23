@@ -778,9 +778,11 @@ public class NotifyxProperties {
     /** 重试配置。 */
     public static class Retry {
         private boolean enabled = true;
+        /** 退避基数兜底；渠道 retryBackoff() 优先（内置渠道默认 2s）。 */
         private Duration baseDelay = Duration.ofSeconds(2);
         private Duration maxDelay = Duration.ofSeconds(60);
         private double jitter = 0.5;
+        /** 全局最大尝试次数（含首次），作为上限；渠道 maxRetries 只能进一步降低。 */
         private int maxAttempts = 3;
 
         public boolean isEnabled() {

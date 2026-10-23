@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-23 21:05（iter-39：Redis 聚合锁释放）
+> 更新时间：2026-10-23 22:05（iter-40：AOP 去重与审计 attempts 修复）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，267 测试执行 + 13 live 跳过（共 280 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，274 测试执行 + 13 live 跳过（共 287 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -17,7 +17,9 @@ iter-32 修复了 5 个可靠性缺陷（渠道异常隔离、自定义 Filter �
 iter-33 修复了 Webhook 嵌套 JSON、保留头覆盖与异常分类；iter-34 把模板渲染异常纳入审计/落盘/onError；
 iter-35 修正了渠道返回 `FAIL_*` 状态时的重试与熔断语义；iter-36 修正了 `@NotifyOn` /
 `@AlarmProtect` 的 `#r`/`#e` 求值时机；iter-37 修正了升级策略窗口不滚动的 bug；
-iter-38 加固了 `JsonCodec` 的非法 Unicode 与超深嵌套处理；iter-39 修复了 Redis 聚合锁不释放。
+iter-38 加固了 `JsonCodec` 的非法 Unicode 与超深嵌套处理；iter-39 修复了 Redis 聚合锁不释放；
+iter-40 修复了 `@AlarmProtect` 数组参数导致的去重失效，并让审计/失败落盘记录真实
+attempts、全局 `retry.max-attempts` 真正封顶。
 Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
 
 ## 2. 已实现（按设计书章节）
@@ -29,10 +31,10 @@ Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续�
 | §9.1 指纹 | `sha256(scene‖bizId‖md5(sorted params))` | core `Fingerprints` | `FingerprintsTest`（T1–T3） |
 | §9.2 漏斗 | 全局静默 → 场景路由 → 免打扰 → 去重 → 场景限流 → 全局限流 → 用户 Filter(900+) | core `pipeline/filter` | `NotifyPipelineTest` |
 | §9.7 熔断 | 按渠道失败阈值 / 打开时长 / 最长打开 | core `CircuitBreaker` | `NotifyPipelineTest` |
-| §9.8 重试 | 指数退避 + 抖动 + 不可重试异常 | core `RetryPolicy` | 部分 |
+| §9.8 重试 | 指数退避 + 抖动 + 不可重试异常 | core `RetryPolicy` | `RetryPolicyTest`、`NotifyPipelineRetryTest` |
 | §9.9 失败落盘 | `FailureStore` SPI + `InMemoryFailureStore`（有界内存） | core | 间接 |
 | §9.11 队列 | 优先级队列、软上限 drop-lowest、绝不 CallerRuns | `notifyx-spring` `PriorityNotifyExecutor` | 部分 |
-| §8.3 L2 | `@AlarmProtect` / `@NotifyOn` + SpEL（默认禁方法调用） | `notifyx-spring` | 缺 AOP 测试 |
+| §8.3 L2 | `@AlarmProtect` / `@NotifyOn` + SpEL（默认禁方法调用） | `notifyx-spring` | `NotifyxAspectTest`（9 个） |
 | §8.1 L0 | Logback Appender：异步有界、噪声过滤、bizId 提取、双重防自递归、Spring 自动绑定 | `notifyx-logback` | `NotifyxAppenderTest` 等 20 个 + E2E |
 | §10.1 渠道 | log / email / webhook（HMAC + 时间戳 + 主机白名单） | `notifyx-channel-*` | webhook 12 个契约测试；email 待补 |
 | §14 配置 | `NotifyxProperties` 全量属性 + 模块内渠道自动装配 + 启动诊断表 | autoconfigure / channel 模块 | `ZeroDependencyStartupTest`（T13）、`NotifyxDiagnosticsTest` |
@@ -80,6 +82,7 @@ Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续�
 - [x] **升级窗口滚动** —— iter-37（长时间稀疏事件后仍可正确升级）
 - [x] **JsonCodec 边界** —— iter-38（非法 `\u` 与超深嵌套统一 IllegalArgumentException）
 - [x] **Redis 聚合锁释放** —— iter-39（token + compare-and-delete，旧锁不再挡住下一窗口）
+- [x] **AOP 参数去重与审计 attempts** —— iter-40（数组归一化、真实尝试次数、全局 retry 上限）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -115,6 +118,7 @@ sms4j 适配。
 | D-020 | T1 聚合与 T0 共用开关，`SET NX` 抢锁保证全局一条摘要，不做崩溃补发 | 重复摘要比丢失更扰民；补发需额外协调机制 |
 | D-021 | JDBC 存储用纯 JDBC 而非 MyBatis-Plus | 当前只有两张表；减少版本/方言耦合，信创 DDL 独立 |
 | D-022 | MQ 模式用门面级 producer-only，幂等键用 eventId | producer 只传输，语义裁决交给 consumer；避免与本地管线重复 |
+| D-028 | 全局 `retry.max-attempts` 是上限，渠道只能降低 | 全局配置应真正生效；渠道 1 次（短信）仍优先，见 decisions.md |
 
 ## 5. 下一步队列
 
@@ -128,7 +132,7 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-39 已合并；下一轮 iter-40 未开始）。本地领先 `origin/master` 17 个提交，
+`master`（iter-40 已合并；下一轮 iter-41 未开始）。本地领先 `origin/master` 19 个提交，
 因 DSH 沙箱禁止 ssh 管道，`git push` 未成功；需在普通终端执行 `git push origin master`。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
 
@@ -149,5 +153,6 @@ sms4j 适配。
 - iter-37 修复升级窗口不滚动：长时间稀疏事件后，新的密集事件仍可达到阈值。
 - iter-38 加固 `JsonCodec`：非法 `\u` 与超深嵌套统一 `IllegalArgumentException`。
 - iter-39 修复 Redis 聚合锁不释放：token + compare-and-delete，旧锁不再挡住下一窗口。
-- 全量 `mvn -B -ntp clean verify` 通过：280 用例（267 执行 + 13 live 跳过）。
+- iter-40 修复 AOP 数组参数去重、审计/落盘 attempts、全局 retry 上限；DEMO 复测 10/10。
+- 全量 `mvn -B -ntp clean verify` 通过：287 用例（274 执行 + 13 live 跳过）。
 - 待 06:00 收尾提醒；剩余 A02/A03/A04/A06/A07/A12/A14/A15。push 与邮件仍阻塞。
