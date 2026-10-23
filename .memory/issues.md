@@ -364,3 +364,11 @@
 - **证据**：`RedisPrimitivesTest.dedupeShouldUseMillisecondTtl`；修复前脚本参数是 `"1"`，
   修复后为 `"100"`。
 - **关闭方式**：脚本改为 `SET NX PX`，参数用 `window.toMillis()`，最小 1ms。
+
+## ISSUE-037 `notifyx.retry.enabled` 绑定后不生效
+- **状态**：CLOSED（iter-43）
+- **现象**：`NotifyxProperties.Retry.enabled` 默认 true，但 `NotifyxAutoConfiguration`
+  构造 `RetryPolicy` 时从不读取；设置 `enabled=false` 仍按 `max-attempts` 重试。
+- **证据**：`RetryConfigurationTest`；修复前关闭开关仍调用失败渠道 3 次。
+- **关闭方式**：`enabled=false` 时 RetryPolicy 的 maxAttempts 取 1；
+  渠道/场景只能进一步降低，不会放大。

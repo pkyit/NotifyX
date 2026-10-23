@@ -272,7 +272,7 @@ notifyx:
 
 > 重试：实际尝试次数 = `min(notifyx.retry.max-attempts, 渠道 maxRetries())`；场景 `retry > 0`
 > 时再取更小值。全局 `max-attempts` 只封顶，不会放大渠道声明；退避基数由渠道
-> `retryBackoff()` 决定（内置渠道默认 2s）。
+> `retryBackoff()` 决定（内置渠道默认 2s）。`notifyx.retry.enabled=false` 时每个渠道只尝试一次。
 
 > 模板里的 `${...}` 是 **NotifyX 模板语法**，不是 Spring 占位符：模板配置用不做替换的 Binder 绑定，
 > 所以 `${userName}` 不会被环境变量 `USERNAME` 篡改（这是实测踩到的坑，见 `.memory` D-011）。
@@ -541,7 +541,7 @@ curl "http://localhost:18080/demo/log-error"   # L0 日志接入演示
 | 静态规则 | Checkstyle | 星号导入、空语句、`equals/hashCode` 不成对、switch 缺 default、漏大括号等 |
 | 覆盖率 | JaCoCo | core ≥ 65%、logback ≥ 80%、其余 ≥ 40%（设计目标 80%/90%，见 `.memory/STATE.md`） |
 
-当前基线：**280 个测试**（core 123 / spring 20 / autoconfigure 38 / store-redis 22 /
+当前基线：**282 个测试**（core 123 / spring 20 / autoconfigure 40 / store-redis 22 /
 store-jdbc 11 / bus-kafka 5 / bus-rabbitmq 4 / consumer 12 / email 8 / logback 20 / webhook 17），
 另有 13 个 live 测试（Redis 8、JDBC 2、Kafka 1、RabbitMQ 1、邮件 1）默认跳过；
 CI 矩阵 JDK 17/21。

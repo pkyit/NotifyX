@@ -356,7 +356,8 @@ public class NotifyxAutoConfiguration {
                 .auditRecorder(auditRecorder)
                 .masker(masker)
                 .metrics(metrics)
-                .retryPolicy(new RetryPolicy(properties.getRetry().getMaxAttempts(),
+                .retryPolicy(new RetryPolicy(properties.getRetry().isEnabled()
+                        ? properties.getRetry().getMaxAttempts() : 1,
                         properties.getRetry().getBaseDelay(), properties.getRetry().getMaxDelay(),
                         properties.getRetry().getJitter()))
                 .instanceId(resolveInstanceId(properties, environment))

@@ -777,6 +777,7 @@ public class NotifyxProperties {
 
     /** 重试配置。 */
     public static class Retry {
+        /** 是否启用渠道失败重试；false 时每个渠道只尝试一次。 */
         private boolean enabled = true;
         /** 退避基数兜底；渠道 retryBackoff() 优先（内置渠道默认 2s）。 */
         private Duration baseDelay = Duration.ofSeconds(2);
