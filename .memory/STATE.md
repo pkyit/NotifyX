@@ -132,7 +132,7 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-40 已合并；下一轮 iter-41 未开始）。本地领先 `origin/master` 19 个提交，
+`master`（iter-40 已合并；下一轮 iter-41 未开始）。本地领先 `origin/master` 20 个提交，
 因 DSH 沙箱禁止 ssh 管道，`git push` 未成功；需在普通终端执行 `git push origin master`。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
 
