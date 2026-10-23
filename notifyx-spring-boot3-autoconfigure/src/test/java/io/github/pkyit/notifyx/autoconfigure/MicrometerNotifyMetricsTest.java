@@ -77,6 +77,32 @@ class MicrometerNotifyMetricsTest {
     }
 
     @Test
+    @DisplayName("自定义 prefix 生效，末尾点自动去掉")
+    void shouldRespectCustomPrefix() {
+        SimpleMeterRegistry custom = new SimpleMeterRegistry();
+        MicrometerNotifyMetrics customMetrics = new MicrometerNotifyMetrics(custom, "acme.notifyx.");
+        NotifyEvent event = NotifyEvent.builder("S1").level(Level.WARN).build();
+
+        customMetrics.eventReceived(event, "L4");
+
+        assertThat(custom.get("acme.notifyx.event.received").counter().count()).isEqualTo(1.0);
+        assertThat(custom.getMeters())
+                .allMatch(meter -> meter.getId().getName().startsWith("acme.notifyx."));
+    }
+
+    @Test
+    @DisplayName("空 prefix 回退到 notifyx")
+    void shouldFallbackToDefaultPrefix() {
+        SimpleMeterRegistry custom = new SimpleMeterRegistry();
+        MicrometerNotifyMetrics customMetrics = new MicrometerNotifyMetrics(custom, "  ");
+        NotifyEvent event = NotifyEvent.builder("S1").build();
+
+        customMetrics.eventReceived(event, "L4");
+
+        assertThat(custom.get("notifyx.event.received").counter().count()).isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("指标名统一 notifyx. 前缀且不使用 receiver/bizId 等高基数标签")
     void shouldKeepLowCardinality() {
         NotifyEvent event = NotifyEvent.builder("S1").bizId("BIZ-1").build();

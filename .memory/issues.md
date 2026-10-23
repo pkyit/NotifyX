@@ -344,3 +344,15 @@
 - **关闭方式**：改为 `min(全局 maxAttempts, 渠道 maxRetries)`；渠道仍可降到 1，
   场景 `retry > 0` 再取更小值。`base-delay` 按设计书 §9.8 继续由渠道
   `retryBackoff()` 决定（内置渠道默认 2s），README 与 design §9.8 已写明。
+
+## ISSUE-035 `notifyx.metrics.enabled` / `prefix` 绑定后不生效
+- **状态**：CLOSED（iter-41）
+- **现象**：`NotifyxProperties.Metrics` 有 `enabled` 和 `prefix`，但
+  `MicrometerNotifyMetrics` 硬编码 `notifyx.` 前缀；自动装配也不看 `enabled`，
+  配置 `prefix=acme` 或 `enabled=false` 都没有效果。
+- **证据**：`MicrometerNotifyMetricsTest.shouldRespectCustomPrefix` /
+  `shouldFallbackToDefaultPrefix`、`MetricsAutoConfigurationTest` 3 个用例；
+  修复前自定义前缀无效，关闭开关仍装配 Micrometer。
+- **关闭方式**：指标名改为 `prefix + "." + suffix`，前缀规范化；
+  自动装配加 `@ConditionalOnProperty(notifyx.metrics.enabled)` 并显式
+  `@EnableConfigurationProperties(NotifyxProperties.class)`。

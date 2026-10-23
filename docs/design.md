@@ -2793,7 +2793,10 @@ public class EmailChannelAutoConfiguration {
 
 ## 第 15 章 可观测性
 
-### 15.1 指标清单（Micrometer，前缀 `notifyx.`）
+### 15.1 指标清单（Micrometer，前缀可配置，默认 `notifyx.`）
+
+> `notifyx.metrics.enabled=false` 可整体关闭 Micrometer 指标；
+> `notifyx.metrics.prefix` 可替换前缀（末尾点自动去掉），下文指标名均以默认前缀示例。
 
 | 指标 | 类型 | 标签 | 用途与告警建议 |
 | --- | --- | --- | --- |
