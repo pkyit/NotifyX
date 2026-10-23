@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -68,6 +70,30 @@ class RedisAggregatorTest {
         assertThat(summaries.get(0).params().get("aggregateCount")).isEqualTo(3L);
         assertThat(summaries.get(0).params().get("aggregateInstances")).isEqualTo(2);
         assertThat(summaries.get(0).tag("aggregate")).isEqualTo("true");
+    }
+
+    @Test
+    @DisplayName("摘要发送后释放锁，避免下一个窗口被旧锁挡住")
+    void shouldReleaseLockAfterFlush() throws InterruptedException {
+        wire();
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
+        when(hashOps.entries(anyString())).thenReturn(Map.of(
+                "count", "1", "scene", "SCENE_A", "firstAt", "1000", "lastAt", "2000", "level", "WARN"));
+        when(setOps.size(anyString())).thenReturn(1L);
+        List<NotifyEvent> summaries = new CopyOnWriteArrayList<>();
+        RedisAggregator aggregator = new RedisAggregator(template, "nx:",
+                new RedisAggregator.Config(true, Duration.ofMillis(50), 100));
+        aggregator.sink(summaries::add);
+
+        aggregator.record(NotifyEvent.builder("SCENE_A").build(), Level.WARN, "key", "i1");
+        await(() -> summaries.size() == 1);
+        Thread.sleep(100);
+        aggregator.close();
+
+        ArgumentCaptor<RedisScript> scripts = ArgumentCaptor.forClass(RedisScript.class);
+        verify(template, atLeastOnce()).execute(scripts.capture(), anyList(), any(Object[].class));
+        assertThat(scripts.getAllValues())
+                .anyMatch(script -> script.getScriptAsString().contains("DEL"));
     }
 
     @Test

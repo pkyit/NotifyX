@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -51,6 +52,13 @@ public final class RedisAggregator implements EventAggregator {
             redis.call('PEXPIRE', KEYS[1], ARGV[6])
             redis.call('PEXPIRE', KEYS[2], ARGV[6])
             return c
+            """, Long.class);
+
+    private static final DefaultRedisScript<Long> LOCK_RELEASE = new DefaultRedisScript<>("""
+            if redis.call('GET', KEYS[1]) == ARGV[1] then
+                return redis.call('DEL', KEYS[1])
+            end
+            return 0
             """, Long.class);
 
     private final StringRedisTemplate template;
@@ -139,48 +147,61 @@ public final class RedisAggregator implements EventAggregator {
 
     private void flush(String key) {
         scheduled.remove(key);
+        String token = UUID.randomUUID().toString();
         try {
-            Boolean locked = template.opsForValue().setIfAbsent(lockKey(key), "1", lockTtl());
+            Boolean locked = template.opsForValue().setIfAbsent(lockKey(key), token, lockTtl());
             if (!Boolean.TRUE.equals(locked)) {
                 return;
             }
-            Map<Object, Object> hash = template.opsForHash().entries(hashKey(key));
-            long count = asLong(hash.get("count"));
-            if (count <= 0) {
-                template.delete(instancesKey(key));
-                return;
-            }
-            String scene = String.valueOf(hash.getOrDefault("scene", "UNKNOWN"));
-            long firstAt = asLong(hash.get("firstAt"));
-            long lastAt = asLong(hash.get("lastAt"));
-            Level level = asLevel(hash.get("level"));
-            Long instances = template.opsForSet().size(instancesKey(key));
+            try {
+                Map<Object, Object> hash = template.opsForHash().entries(hashKey(key));
+                long count = asLong(hash.get("count"));
+                if (count <= 0) {
+                    template.delete(instancesKey(key));
+                    return;
+                }
+                String scene = String.valueOf(hash.getOrDefault("scene", "UNKNOWN"));
+                long firstAt = asLong(hash.get("firstAt"));
+                long lastAt = asLong(hash.get("lastAt"));
+                Level level = asLevel(hash.get("level"));
+                Long instances = template.opsForSet().size(instancesKey(key));
 
-            Map<String, Object> params = new LinkedHashMap<>();
-            params.put("aggregateCount", count);
-            params.put("aggregateScene", scene);
-            params.put("aggregateWindowSeconds", config.window().toSeconds());
-            params.put("aggregateFirstAt", Instant.ofEpochMilli(firstAt).toString());
-            params.put("aggregateLastAt", Instant.ofEpochMilli(lastAt).toString());
-            params.put("aggregateInstances", instances == null ? 0 : instances.intValue());
-            if (hash.get("firstSample") != null) {
-                params.put("aggregateFirstSample", String.valueOf(hash.get("firstSample")));
+                Map<String, Object> params = new LinkedHashMap<>();
+                params.put("aggregateCount", count);
+                params.put("aggregateScene", scene);
+                params.put("aggregateWindowSeconds", config.window().toSeconds());
+                params.put("aggregateFirstAt", Instant.ofEpochMilli(firstAt).toString());
+                params.put("aggregateLastAt", Instant.ofEpochMilli(lastAt).toString());
+                params.put("aggregateInstances", instances == null ? 0 : instances.intValue());
+                if (hash.get("firstSample") != null) {
+                    params.put("aggregateFirstSample", String.valueOf(hash.get("firstSample")));
+                }
+                if (hash.get("lastSample") != null) {
+                    params.put("aggregateLastSample", String.valueOf(hash.get("lastSample")));
+                }
+                NotifyEvent summary = NotifyEvent.builder(scene)
+                        .level(level)
+                        .title("【" + scene + "】聚合告警：" + count + " 条 / " + config.window().toSeconds() + "s")
+                        .dedupeKey("agg:" + key + ":" + firstAt)
+                        .params(params)
+                        .tag("aggregate", "true")
+                        .tag("aggregateCount", String.valueOf(count))
+                        .build();
+                template.delete(List.of(hashKey(key), instancesKey(key)));
+                sink.accept(summary);
+            } finally {
+                releaseLock(key, token);
             }
-            if (hash.get("lastSample") != null) {
-                params.put("aggregateLastSample", String.valueOf(hash.get("lastSample")));
-            }
-            NotifyEvent summary = NotifyEvent.builder(scene)
-                    .level(level)
-                    .title("【" + scene + "】聚合告警：" + count + " 条 / " + config.window().toSeconds() + "s")
-                    .dedupeKey("agg:" + key + ":" + firstAt)
-                    .params(params)
-                    .tag("aggregate", "true")
-                    .tag("aggregateCount", String.valueOf(count))
-                    .build();
-            template.delete(List.of(hashKey(key), instancesKey(key)));
-            sink.accept(summary);
         } catch (RuntimeException ex) {
             log.warn("notifyx redis aggregation flush failed: {}", ex.toString());
+        }
+    }
+
+    private void releaseLock(String key, String token) {
+        try {
+            template.execute(LOCK_RELEASE, List.of(lockKey(key)), token);
+        } catch (RuntimeException ex) {
+            log.debug("notifyx redis aggregation lock release failed: {}", ex.toString());
         }
     }
 

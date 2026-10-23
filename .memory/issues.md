@@ -294,3 +294,12 @@
   `shouldRejectTooDeepNesting`；修复前分别抛越界异常与可能栈溢出。
 - **关闭方式**：`\u` 解析前检查长度并把非法十六进制转为 `IllegalArgumentException`；
   解析器增加 `MAX_DEPTH=64`，超限统一抛 `json nesting too deep`。
+
+## ISSUE-031 Redis 聚合锁不释放，旧锁挡住下一窗口的摘要
+- **状态**：CLOSED（iter-39）
+- **现象**：`RedisAggregator.flush()` 抢到摘要锁后从不删除，只依赖
+  `window*2+5s` 的 TTL；同一 `dedupeKey` 在下一个窗口再次出现时抢锁失败，
+  摘要被跳过，形成“隔一个窗口丢一次”的规律。
+- **证据**：`RedisAggregatorTest.shouldReleaseLockAfterFlush`；修复前锁 key 没有删除路径。
+- **关闭方式**：锁值改为每次 flush 的 UUID token，`finally` 中 Lua compare-and-delete
+  释放；TTL 仍作为崩溃兜底。
