@@ -275,3 +275,12 @@
   修复前 `bizId` 为空、`ctx0` 缺失。
 - **关闭方式**：`buildEvent` 增加 `result` 参数，`bizId` / `context` 改用 `evaluateAfter`；
   `@AlarmProtect` 传 `null` result + 异常，`@NotifyOn` 传真实返回值/异常。
+
+## ISSUE-029 升级策略窗口不滚动，长时间稀疏事件后永远无法升级
+- **状态**：CLOSED（iter-37）
+- **现象**：`EscalationPolicy.record()` 只在距上次事件超过窗口时 reset；长时间“间隔小于窗口”的
+  稀疏事件会让 `firstAt` 停在第一次事件，之后即使密集发生，`now - firstAt` 也永远大于窗口，
+  升级状态不可达。
+- **证据**：`EscalationPolicyTest.shouldRollWindowAfterLongGap`；修复前 t0/t9/t18/t19/t20
+  均不升级。
+- **关闭方式**：改为按 `firstAt` 判断窗口过期并滚动到当前事件；删除无用的 `lastAt`。
