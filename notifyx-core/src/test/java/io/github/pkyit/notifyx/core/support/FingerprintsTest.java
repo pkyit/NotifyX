@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
@@ -60,6 +61,18 @@ class FingerprintsTest {
     void shouldDifferByBizId() {
         assertThat(Fingerprints.of("SCENE_A", "biz-1", Map.of()))
                 .isNotEqualTo(Fingerprints.of("SCENE_A", "biz-2", Map.of()));
+    }
+
+    @Test
+    @DisplayName("数组与等值 List 使用同一规范化格式，不受 identity hash 影响")
+    void shouldCanonicalizeArrays() {
+        Map<String, Object> array = Map.of("args", new Object[]{"SO1", 2});
+        Map<String, Object> list = Map.of("args", List.of("SO1", 2));
+
+        assertThat(Fingerprints.of("SCENE_A", "SO1", array))
+                .isEqualTo(Fingerprints.of("SCENE_A", "SO1", list));
+        assertThat(Fingerprints.of("SCENE_A", "SO1", Map.of("args", new Object[]{"SO1"})))
+                .isNotEqualTo(Fingerprints.of("SCENE_A", "SO1", Map.of("args", new Object[]{"SO2"})));
     }
 
     @Test

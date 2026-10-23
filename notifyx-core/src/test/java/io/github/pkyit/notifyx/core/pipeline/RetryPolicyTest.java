@@ -55,6 +55,17 @@ class RetryPolicyTest {
     }
 
     @Test
+    @DisplayName("全局 maxAttempts 是上限：渠道声明更多也不能突破")
+    void shouldCapAttemptsByGlobalMaximum() {
+        RetryPolicy policy = new RetryPolicy(2, Duration.ofMillis(10), Duration.ofSeconds(1), 0.0);
+
+        assertThat(policy.attemptsFor(new StubChannel(3, Duration.ofMillis(10)))).isEqualTo(2);
+        assertThat(policy.attemptsFor(new StubChannel(5, Duration.ofMillis(10)))).isEqualTo(2);
+        assertThat(policy.attemptsFor(new StubChannel(1, Duration.ofMillis(10)))).isEqualTo(1);
+        assertThat(policy.attemptsFor(new StubChannel(0, Duration.ofMillis(10)))).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("默认策略参数：3 次 / 2s 基数 / 60s 上限")
     void shouldProvideDefaults() {
         RetryPolicy policy = RetryPolicy.defaults();

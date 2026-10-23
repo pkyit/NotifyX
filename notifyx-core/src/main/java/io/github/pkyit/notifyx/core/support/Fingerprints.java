@@ -1,5 +1,6 @@
 package io.github.pkyit.notifyx.core.support;
 
+import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -107,6 +108,15 @@ public final class Fingerprints {
         }
         if (value instanceof Enum<?> enumValue) {
             return enumValue.name();
+        }
+        if (value.getClass().isArray()) {
+            // 与 Collection 使用同一规范化格式，避免数组退化为 identity hash。
+            int length = Array.getLength(value);
+            List<String> items = new ArrayList<>(length);
+            for (int i = 0; i < length; i++) {
+                items.add(canonicalValue(Array.get(value, i)));
+            }
+            return "[" + String.join(",", items) + "]";
         }
         if (value instanceof Map<?, ?> nested) {
             StringBuilder builder = new StringBuilder("{");

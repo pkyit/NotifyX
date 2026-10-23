@@ -101,7 +101,9 @@ class NotifyPipelineFailureContainmentTest {
         assertThat(handled).isFalse();
         assertThat(channel.calls).isZero();
         assertThat(audit.statuses()).containsExactly("FAIL_NON_RETRYABLE");
+        assertThat(audit.records.get(0).attempts()).isZero();
         assertThat(failures.records).hasSize(1);
+        assertThat(failures.records.get(0).attempts()).isZero();
         assertThat(onError).hasValue(1);
     }
 

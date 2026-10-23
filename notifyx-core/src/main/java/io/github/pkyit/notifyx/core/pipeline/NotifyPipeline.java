@@ -247,7 +247,7 @@ public final class NotifyPipeline {
             String reason = "template render failed: " + ex.getClass().getSimpleName()
                     + (ex.getMessage() == null ? "" : ": " + ex.getMessage());
             return failBeforeSend(event, level, channel, receiver,
-                    SendResult.nonRetryable(reason, Duration.ZERO), maxAttempts, dedupeKey);
+                    SendResult.nonRetryable(reason, Duration.ZERO), dedupeKey);
         }
         NotifyContext baseContext = NotifyContext.builder(event)
                 .renderedTitle(renderedTitle)
@@ -266,11 +266,13 @@ public final class NotifyPipeline {
         CircuitBreaker breaker = breakerFor(channel.name());
         long started = System.nanoTime();
         SendResult result = null;
+        int attemptsUsed = 0;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             if (!breaker.allowRequest()) {
                 result = SendResult.suppressed(SendResult.Status.CIRCUIT_OPEN, "channel circuit open");
                 break;
             }
+            attemptsUsed = attempt;
             NotifyContext context = baseContext.withAttempt(attempt);
             try {
                 result = channel.send(context);
@@ -339,13 +341,13 @@ public final class NotifyPipeline {
             result = SendResult.retryable("channel produced no result", elapsed(started));
         }
         Duration cost = result.cost();
-        audit(event, level, channel.name(), receiver, result, cost);
+        audit(event, level, channel.name(), receiver, result, cost, attemptsUsed);
         metrics.sendResult(channel.name(), event.scene(), result.status(), cost);
         boolean failed = result.status() == SendResult.Status.FAIL_RETRYABLE
                 || result.status() == SendResult.Status.FAIL_NON_RETRYABLE
                 || result.status() == SendResult.Status.CIRCUIT_OPEN;
         if (failed) {
-            persistFailure(event, channel.name(), result, maxAttempts, dedupeKey);
+            persistFailure(event, channel.name(), result, attemptsUsed, dedupeKey);
             notifyOnError(event, result);
         } else if (result.status() == SendResult.Status.SUCCESS) {
             notifyOnSuccess(event);
@@ -354,10 +356,11 @@ public final class NotifyPipeline {
     }
 
     private boolean failBeforeSend(NotifyEvent event, Level level, NotifyChannel channel, String receiver,
-                                   SendResult result, int maxAttempts, String dedupeKey) {
-        audit(event, level, channel.name(), receiver, result, Duration.ZERO);
+                                   SendResult result, String dedupeKey) {
+        // 渲染在渠道调用之前失败，因此真实渠道尝试次数为 0。
+        audit(event, level, channel.name(), receiver, result, Duration.ZERO, 0);
         metrics.sendResult(channel.name(), event.scene(), result.status(), Duration.ZERO);
-        persistFailure(event, channel.name(), result, maxAttempts, dedupeKey);
+        persistFailure(event, channel.name(), result, 0, dedupeKey);
         notifyOnError(event, result);
         return true;
     }
@@ -407,7 +410,7 @@ public final class NotifyPipeline {
     }
 
     private void audit(NotifyEvent event, Level level, String channel, String receiver, SendResult result,
-                       Duration cost) {
+                       Duration cost, int attempts) {
         if (auditRecorder == null) {
             return;
         }
@@ -420,7 +423,7 @@ public final class NotifyPipeline {
                     event.bizId(), channel, maskedReceiver,
                     result == null ? "UNKNOWN" : result.status().name(),
                     result == null ? null : result.failureReason(),
-                    result == null ? 0 : 1, cost.toMillis(), instanceId,
+                    attempts, cost.toMillis(), instanceId,
                     resolveTraceId(event), System.currentTimeMillis(),
                     result != null && result.status() == SendResult.Status.SUCCESS
                             ? Long.valueOf(System.currentTimeMillis()) : null));
@@ -432,7 +435,7 @@ public final class NotifyPipeline {
     private void reject(NotifyEvent event, String reason) {
         log.debug("event rejected: scene={} reason={}", event.scene(), reason);
         audit(event, event.level(), "-", null,
-                SendResult.suppressed(statusFor(reason), reason), Duration.ZERO);
+                SendResult.suppressed(statusFor(reason), reason), Duration.ZERO, 0);
     }
 
     private void defer(NotifyEvent event, FilterVerdict verdict) {
@@ -442,7 +445,7 @@ public final class NotifyPipeline {
         }
         deferredHandler.defer(event, verdict.deferUntil());
         audit(event, event.level(), "-", null,
-                SendResult.suppressed(SendResult.Status.SUPPRESSED, "deferred"), Duration.ZERO);
+                SendResult.suppressed(SendResult.Status.SUPPRESSED, "deferred"), Duration.ZERO, 0);
     }
 
     private static SendResult.Status statusFor(String reason) {

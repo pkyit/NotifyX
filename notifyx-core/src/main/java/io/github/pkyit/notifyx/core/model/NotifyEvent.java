@@ -1,5 +1,6 @@
 package io.github.pkyit.notifyx.core.model;
 
+import java.lang.reflect.Array;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.Temporal;
@@ -245,6 +246,16 @@ public final class NotifyEvent implements java.io.Serializable {
         }
         if (depth >= MAX_PARAM_DEPTH) {
             return String.valueOf(value);
+        }
+        if (value.getClass().isArray()) {
+            // 数组必须逐元素归一化：String.valueOf(Object[]) 是 identity hash，
+            // 会让去重指纹每次调用都不同（@AlarmProtect 的 args 参数曾因此失效）。
+            int length = Array.getLength(value);
+            List<Object> nested = new ArrayList<>(length);
+            for (int i = 0; i < length; i++) {
+                nested.add(normalizeValue(Array.get(value, i), depth + 1));
+            }
+            return Collections.unmodifiableList(nested);
         }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> nested = new LinkedHashMap<>();

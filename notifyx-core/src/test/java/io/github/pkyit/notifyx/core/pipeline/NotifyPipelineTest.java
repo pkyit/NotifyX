@@ -85,6 +85,21 @@ class NotifyPipelineTest {
     }
 
     @Test
+    @DisplayName("数组参数归一后去重指纹稳定，窗口内只发一次")
+    void arrayParamsDoNotBreakDedupe() {
+        NotifyPipeline pipeline = pipeline(List.of(new DedupeFilter(dedupeStore)),
+                SceneConfig.builder("SCENE_A").channels(List.of("recording"))
+                        .silentWindow(Duration.ofMinutes(5)).build());
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A").bizId("SO1")
+                .param("args", new Object[]{"SO1", "boom"}).build());
+        pipeline.handle(NotifyEvent.builder("SCENE_A").bizId("SO1")
+                .param("args", new Object[]{"SO1", "boom"}).build());
+
+        assertThat(channel.receivers).hasSize(1);
+    }
+
+    @Test
     @DisplayName("场景禁用时不投递")
     void disabledSceneIsSuppressed() {
         NotifyPipeline pipeline = pipeline(List.of(new SceneRoutingFilter()),
@@ -94,6 +109,7 @@ class NotifyPipelineTest {
 
         assertThat(channel.receivers).isEmpty();
         assertThat(audit.records).anyMatch(record -> "SUPPRESSED".equals(record.status()));
+        assertThat(audit.records.get(0).attempts()).isZero();
     }
 
     private NotifyPipeline pipeline(List<EventFilter> filters, SceneConfig sceneConfig) {

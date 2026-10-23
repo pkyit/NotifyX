@@ -46,6 +46,23 @@ class NotifyPipelineRetryTest {
         assertThat(channel.calls).isEqualTo(3);
         assertThat(channel.delivered).hasSize(1);
         assertThat(audit.statuses()).containsExactly("SUCCESS");
+        assertThat(audit.attempts()).containsExactly(3);
+    }
+
+    @Test
+    @DisplayName("重试耗尽后审计 attempts 为真实尝试次数")
+    void shouldAuditActualAttemptsAfterRetriesExhausted() {
+        channel.failures.add(new ChannelTimeoutException("scripted", null));
+        channel.failures.add(new ChannelTimeoutException("scripted", null));
+        channel.failures.add(new ChannelTimeoutException("scripted", null));
+        NotifyPipeline pipeline = pipeline(SceneConfig.builder("SCENE_A").channels(List.of("scripted")).build(),
+                new RetryPolicy(3, Duration.ofMillis(1), Duration.ofMillis(5), 0.0), 10, Duration.ofMillis(100));
+
+        pipeline.handle(event());
+
+        assertThat(channel.calls).isEqualTo(3);
+        assertThat(audit.statuses()).containsExactly("FAIL_RETRYABLE");
+        assertThat(audit.attempts()).containsExactly(3);
     }
 
     @Test
@@ -60,6 +77,7 @@ class NotifyPipelineRetryTest {
         assertThat(channel.calls).isEqualTo(1);
         assertThat(channel.delivered).isEmpty();
         assertThat(audit.statuses()).containsExactly("FAIL_NON_RETRYABLE");
+        assertThat(audit.attempts()).containsExactly(1);
     }
 
     @Test
@@ -73,6 +91,7 @@ class NotifyPipelineRetryTest {
 
         assertThat(channel.calls).isEqualTo(1);
         assertThat(audit.statuses()).containsExactly("FAIL_RETRYABLE");
+        assertThat(audit.attempts()).containsExactly(1);
     }
 
     @Test
@@ -89,6 +108,7 @@ class NotifyPipelineRetryTest {
 
         assertThat(channel.calls).isEqualTo(2);
         assertThat(audit.statuses()).containsExactly("FAIL_RETRYABLE", "FAIL_RETRYABLE", "CIRCUIT_OPEN");
+        assertThat(audit.attempts()).containsExactly(1, 1, 0);
 
         Thread.sleep(150);
         pipeline.handle(event());
@@ -96,6 +116,7 @@ class NotifyPipelineRetryTest {
         assertThat(channel.calls).isEqualTo(3);
         assertThat(channel.delivered).hasSize(1);
         assertThat(audit.statuses()).last().isEqualTo("SUCCESS");
+        assertThat(audit.attempts()).last().isEqualTo(1);
     }
 
     @Test
@@ -166,6 +187,10 @@ class NotifyPipelineRetryTest {
 
         private List<String> statuses() {
             return records.stream().map(AuditRecord::status).toList();
+        }
+
+        private List<Integer> attempts() {
+            return records.stream().map(AuditRecord::attempts).toList();
         }
     }
 }

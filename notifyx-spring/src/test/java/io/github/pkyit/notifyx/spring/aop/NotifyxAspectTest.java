@@ -19,6 +19,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 import io.github.pkyit.notifyx.core.model.Level;
 import io.github.pkyit.notifyx.core.model.NotifyEvent;
+import io.github.pkyit.notifyx.core.support.Fingerprints;
 import io.github.pkyit.notifyx.spring.annotation.AlarmProtect;
 import io.github.pkyit.notifyx.spring.annotation.NotifyOn;
 import io.github.pkyit.notifyx.spring.spel.SpelEvaluator;
@@ -63,6 +64,20 @@ class NotifyxAspectTest {
         assertThat(event.silentWindow()).hasSeconds(30);
         assertThat(event.receivers()).containsExactly("ops@example.com");
         assertThat(event.params()).containsEntry("exception", "IllegalStateException");
+    }
+
+    @Test
+    @DisplayName("@AlarmProtect：同一业务参数重复失败产生相同指纹，数组参数不引入 identity hash")
+    void shouldProduceStableFingerprintForRepeatedArgs() {
+        assertThatThrownBy(() -> service.fail("SO1")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.fail("SO1")).isInstanceOf(IllegalStateException.class);
+
+        assertThat(KIT.events).hasSize(2);
+        NotifyEvent first = KIT.events.get(0);
+        NotifyEvent second = KIT.events.get(1);
+        assertThat(first.params()).isEqualTo(second.params());
+        assertThat(Fingerprints.of(first.scene(), first.bizId(), first.params()))
+                .isEqualTo(Fingerprints.of(second.scene(), second.bizId(), second.params()));
     }
 
     @Test
