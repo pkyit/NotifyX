@@ -9,7 +9,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import io.github.pkyit.notifyx.core.spi.DedupeStore;
 
 /**
- * Redis 分布式去重（设计书 §9.4）：{@code SET NX EX}，窗口内只放行一次。
+ * Redis 分布式去重（设计书 §9.4）：{@code SET NX PX}，窗口内只放行一次。
  *
  * <p>{@code release} 对应发送失败时释放槽位；{@code size} 为避免 {@code KEYS} 扫描返回 -1。</p>
  *
@@ -21,7 +21,7 @@ import io.github.pkyit.notifyx.core.spi.DedupeStore;
 public final class RedisDedupeStore implements DedupeStore {
 
     private static final DefaultRedisScript<Long> ACQUIRE = new DefaultRedisScript<>(
-            "return redis.call('SET', KEYS[1], '1', 'NX', 'EX', ARGV[1]) and 1 or 0", Long.class);
+            "return redis.call('SET', KEYS[1], '1', 'NX', 'PX', ARGV[1]) and 1 or 0", Long.class);
 
     private final StringRedisTemplate template;
     private final String keyPrefix;
@@ -39,8 +39,8 @@ public final class RedisDedupeStore implements DedupeStore {
 
     @Override
     public boolean tryAcquire(String dedupeKey, Duration window) {
-        long seconds = Math.max(1L, window == null ? 1L : window.toSeconds());
-        Long result = template.execute(ACQUIRE, List.of(key(dedupeKey)), String.valueOf(seconds));
+        long millis = Math.max(1L, window == null ? 1L : window.toMillis());
+        Long result = template.execute(ACQUIRE, List.of(key(dedupeKey)), String.valueOf(millis));
         return result != null && result == 1L;
     }
 

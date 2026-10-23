@@ -356,3 +356,11 @@
 - **关闭方式**：指标名改为 `prefix + "." + suffix`，前缀规范化；
   自动装配加 `@ConditionalOnProperty(notifyx.metrics.enabled)` 并显式
   `@EnableConfigurationProperties(NotifyxProperties.class)`。
+
+## ISSUE-036 Redis 去重 TTL 用秒截断，亚秒窗口被放大到 1 秒
+- **状态**：CLOSED（iter-42）
+- **现象**：`RedisDedupeStore` 用 `SET NX EX` + `window.toSeconds()`；`Duration.ofMillis(100)`
+  变成 1 秒，去重窗口比配置长，且与 `MemoryDedupeStore` 的毫秒语义不一致。
+- **证据**：`RedisPrimitivesTest.dedupeShouldUseMillisecondTtl`；修复前脚本参数是 `"1"`，
+  修复后为 `"100"`。
+- **关闭方式**：脚本改为 `SET NX PX`，参数用 `window.toMillis()`，最小 1ms。
