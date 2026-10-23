@@ -16,6 +16,8 @@ import java.util.Map;
  */
 public final class JsonCodec {
 
+    private static final int MAX_DEPTH = 64;
+
     private JsonCodec() {
     }
 
@@ -42,7 +44,7 @@ public final class JsonCodec {
             throw new IllegalArgumentException("json text is null");
         }
         Parser parser = new Parser(text);
-        Object value = parser.parseValue();
+        Object value = parser.parseValue(0);
         parser.skipWhitespace();
         if (!parser.eof()) {
             throw new IllegalArgumentException("unexpected trailing content at " + parser.index);
@@ -151,15 +153,18 @@ public final class JsonCodec {
             this.text = text;
         }
 
-        private Object parseValue() {
+        private Object parseValue(int depth) {
+            if (depth > MAX_DEPTH) {
+                throw new IllegalArgumentException("json nesting too deep at " + index);
+            }
             skipWhitespace();
             if (eof()) {
                 throw new IllegalArgumentException("unexpected end of json");
             }
             char ch = text.charAt(index);
             return switch (ch) {
-                case '{' -> parseObject();
-                case '[' -> parseArray();
+                case '{' -> parseObject(depth + 1);
+                case '[' -> parseArray(depth + 1);
                 case '"' -> parseString();
                 case 't' -> parseLiteral("true", Boolean.TRUE);
                 case 'f' -> parseLiteral("false", Boolean.FALSE);
@@ -168,7 +173,7 @@ public final class JsonCodec {
             };
         }
 
-        private Map<String, Object> parseObject() {
+        private Map<String, Object> parseObject(int depth) {
             expect('{');
             Map<String, Object> map = new java.util.LinkedHashMap<>();
             skipWhitespace();
@@ -181,7 +186,7 @@ public final class JsonCodec {
                 String key = parseString();
                 skipWhitespace();
                 expect(':');
-                map.put(key, parseValue());
+                map.put(key, parseValue(depth));
                 skipWhitespace();
                 char ch = next();
                 if (ch == '}') {
@@ -193,7 +198,7 @@ public final class JsonCodec {
             }
         }
 
-        private java.util.List<Object> parseArray() {
+        private java.util.List<Object> parseArray(int depth) {
             expect('[');
             java.util.List<Object> list = new java.util.ArrayList<>();
             skipWhitespace();
@@ -202,7 +207,7 @@ public final class JsonCodec {
                 return list;
             }
             while (true) {
-                list.add(parseValue());
+                list.add(parseValue(depth));
                 skipWhitespace();
                 char ch = next();
                 if (ch == ']') {
@@ -239,7 +244,17 @@ public final class JsonCodec {
                     case 'n' -> builder.append('\n');
                     case 'r' -> builder.append('\r');
                     case 't' -> builder.append('\t');
-                    case 'u' -> builder.append((char) Integer.parseInt(text.substring(index, index + 4), 16));
+                    case 'u' -> {
+                        if (index + 4 > text.length()) {
+                            throw new IllegalArgumentException("truncated unicode escape at " + index);
+                        }
+                        String hex = text.substring(index, index + 4);
+                        try {
+                            builder.append((char) Integer.parseInt(hex, 16));
+                        } catch (NumberFormatException ex) {
+                            throw new IllegalArgumentException("bad unicode escape \\u" + hex, ex);
+                        }
+                    }
                     default -> throw new IllegalArgumentException("bad escape \\" + escaped);
                 }
                 if (escaped == 'u') {

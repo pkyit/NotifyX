@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-23 19:05（iter-37：升级策略窗口滚动修复）
+> 更新时间：2026-10-23 20:05（iter-38：JsonCodec 边界健壮性）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，264 测试执行 + 13 live 跳过（共 277 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，266 测试执行 + 13 live 跳过（共 279 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -16,7 +16,8 @@
 iter-32 修复了 5 个可靠性缺陷（渠道异常隔离、自定义 Filter 装配、保留期删除空转、嵌套脱敏、限流计数）；
 iter-33 修复了 Webhook 嵌套 JSON、保留头覆盖与异常分类；iter-34 把模板渲染异常纳入审计/落盘/onError；
 iter-35 修正了渠道返回 `FAIL_*` 状态时的重试与熔断语义；iter-36 修正了 `@NotifyOn` /
-`@AlarmProtect` 的 `#r`/`#e` 求值时机；iter-37 修正了升级策略窗口不滚动的 bug。
+`@AlarmProtect` 的 `#r`/`#e` 求值时机；iter-37 修正了升级策略窗口不滚动的 bug；
+iter-38 加固了 `JsonCodec` 的非法 Unicode 与超深嵌套处理。
 Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
 
 ## 2. 已实现（按设计书章节）
@@ -77,6 +78,7 @@ Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续�
 - [x] **渠道失败状态语义** —— iter-35（FAIL_RETRYABLE 重试、FAIL_NON_RETRYABLE 记熔断、抑制状态中立）
 - [x] **AOP SpEL 后置求值** —— iter-36（`@NotifyOn` 可用 `#r`、`@AlarmProtect` 可用 `#e`）
 - [x] **升级窗口滚动** —— iter-37（长时间稀疏事件后仍可正确升级）
+- [x] **JsonCodec 边界** —— iter-38（非法 `\u` 与超深嵌套统一 IllegalArgumentException）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -125,7 +127,7 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-37 已合并；下一轮 iter-38 未开始）。本地领先 `origin/master` 13 个提交，
+`master`（iter-38 已合并；下一轮 iter-39 未开始）。本地领先 `origin/master` 15 个提交，
 因 DSH 沙箱禁止 ssh 管道，`git push` 未成功；需在普通终端执行 `git push origin master`。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
 
@@ -144,5 +146,6 @@ sms4j 适配。
 - 19:00 提醒触发；检查环境变量与工作区，仍无 163 SMTP/IMAP 凭据、无用户回复。
 - 自动 goal 创建被拒（工具要求直接人类回合），本轮按单轮继续，不擅自扩 P2+ 范围。
 - iter-37 修复升级窗口不滚动：长时间稀疏事件后，新的密集事件仍可达到阈值。
-- 全量 `mvn -B -ntp clean verify` 通过：277 用例（264 执行 + 13 live 跳过）。
+- iter-38 加固 `JsonCodec`：非法 `\u` 与超深嵌套统一 `IllegalArgumentException`。
+- 全量 `mvn -B -ntp clean verify` 通过：279 用例（266 执行 + 13 live 跳过）。
 - 待 06:00 收尾提醒；剩余 A02/A03/A04/A06/A07/A12/A14/A15。push 与邮件仍阻塞。

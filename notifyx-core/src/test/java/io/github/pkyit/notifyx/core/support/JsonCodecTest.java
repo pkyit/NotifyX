@@ -73,6 +73,28 @@ class JsonCodecTest {
     }
 
     @Test
+    @DisplayName("Unicode 转义缺失/非法时抛 IllegalArgumentException")
+    void shouldRejectMalformedUnicodeEscape() {
+        assertThatThrownBy(() -> JsonCodec.read("\"\\u12\""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("truncated unicode escape");
+        assertThatThrownBy(() -> JsonCodec.read("\"\\uZZZZ\""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bad unicode escape");
+        assertThat(JsonCodec.read("\"\\u4e2d\"")).isEqualTo("中");
+    }
+
+    @Test
+    @DisplayName("嵌套过深时快速失败，避免 StackOverflowError")
+    void shouldRejectTooDeepNesting() {
+        String deep = "[".repeat(100) + "0" + "]".repeat(100);
+
+        assertThatThrownBy(() -> JsonCodec.read(deep))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("nesting too deep");
+    }
+
+    @Test
     @DisplayName("NaN/Infinity 输出 null，避免产生非法 JSON")
     void shouldNotEmitInvalidNumbers() {
         assertThat(JsonCodec.write(Double.NaN)).isEqualTo("null");

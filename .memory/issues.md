@@ -284,3 +284,13 @@
 - **证据**：`EscalationPolicyTest.shouldRollWindowAfterLongGap`；修复前 t0/t9/t18/t19/t20
   均不升级。
 - **关闭方式**：改为按 `firstAt` 判断窗口过期并滚动到当前事件；删除无用的 `lastAt`。
+
+## ISSUE-030 JsonCodec 对非法 Unicode 转义与超深嵌套的处理不符合契约
+- **状态**：CLOSED（iter-38）
+- **现象**：`\u` 转义不足 4 位时抛 `StringIndexOutOfBoundsException`；嵌套数组/对象无深度上限，
+  损坏的 envelope 可导致 `StackOverflowError`，与 `read()` 声明的
+  “解析失败抛 `IllegalArgumentException`”不符。
+- **证据**：`JsonCodecTest.shouldRejectMalformedUnicodeEscape` /
+  `shouldRejectTooDeepNesting`；修复前分别抛越界异常与可能栈溢出。
+- **关闭方式**：`\u` 解析前检查长度并把非法十六进制转为 `IllegalArgumentException`；
+  解析器增加 `MAX_DEPTH=64`，超限统一抛 `json nesting too deep`。
