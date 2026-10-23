@@ -9,9 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 
@@ -44,6 +46,18 @@ class RedisPrimitivesTest {
         when(template.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn((Long) null);
 
         assertThat(new RedisDedupeStore(template, "nx:").tryAcquire("k", Duration.ofSeconds(1))).isFalse();
+    }
+
+    @Test
+    @DisplayName("去重 TTL 使用毫秒，保留亚秒窗口")
+    void dedupeShouldUseMillisecondTtl() {
+        when(template.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(1L);
+
+        new RedisDedupeStore(template, "nx:").tryAcquire("k", Duration.ofMillis(100));
+
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        verify(template).execute(any(RedisScript.class), eq(List.of("nx:dedup:k")), args.capture());
+        assertThat(args.getValue()).containsExactly("100");
     }
 
     @Test
