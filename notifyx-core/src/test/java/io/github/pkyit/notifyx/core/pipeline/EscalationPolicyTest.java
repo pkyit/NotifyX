@@ -41,6 +41,20 @@ class EscalationPolicyTest {
     }
 
     @Test
+    @DisplayName("旧窗口过期后，新的连续事件仍可触发升级")
+    void shouldRollWindowAfterLongGap() {
+        EscalationPolicy policy = policy(3, 10, List.of("sms"), false);
+
+        assertThat(policy.record("ORDER_CREATE_FAIL", NOW).escalated()).isFalse();
+        assertThat(policy.record("ORDER_CREATE_FAIL", NOW + 9 * 60_000L).escalated()).isFalse();
+        assertThat(policy.record("ORDER_CREATE_FAIL", NOW + 18 * 60_000L).escalated()).isFalse();
+
+        // 旧实现 firstAt 永远停在 NOW，导致之后的密集事件也无法升级
+        assertThat(policy.record("ORDER_CREATE_FAIL", NOW + 19 * 60_000L).escalated()).isFalse();
+        assertThat(policy.record("ORDER_CREATE_FAIL", NOW + 20 * 60_000L).escalated()).isTrue();
+    }
+
+    @Test
     @DisplayName("恢复场景清零目标场景")
     void shouldResetByRecoveryScene() {
         EscalationPolicy policy = new EscalationPolicy(

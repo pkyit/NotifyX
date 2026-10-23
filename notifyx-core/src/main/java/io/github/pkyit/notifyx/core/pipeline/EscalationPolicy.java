@@ -85,16 +85,11 @@ public final class EscalationPolicy {
         }
         State state = states.computeIfAbsent(scene, ignored -> new State());
         synchronized (state) {
-            if (state.lastAt > 0 && now - state.lastAt > rule.within().toMillis()) {
+            if (state.firstAt == 0 || now - state.firstAt > rule.within().toMillis()) {
                 state.reset(now);
             }
-            if (state.firstAt == 0) {
-                state.firstAt = now;
-            }
             state.count++;
-            state.lastAt = now;
-            if (!state.escalated && state.count >= rule.consecutive()
-                    && now - state.firstAt <= rule.within().toMillis()) {
+            if (!state.escalated && state.count >= rule.consecutive()) {
                 state.escalated = true;
             }
             return state.escalated ? new Outcome(true, rule.upgradeTo()) : Outcome.none();
@@ -223,13 +218,11 @@ public final class EscalationPolicy {
     private static final class State {
 
         private long firstAt;
-        private long lastAt;
         private int count;
         private boolean escalated;
 
         private void reset(long now) {
             firstAt = now;
-            lastAt = 0;
             count = 0;
             escalated = false;
         }
