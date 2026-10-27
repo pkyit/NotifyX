@@ -141,8 +141,9 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-44 已合并并推送到 `origin/master`，合并提交 `9f3daa9`；
-`release/1.0.0` 分支保留）。
+`master`（iter-45 已合并；1.0.1 候选）。`origin/master` 停在 `6e9428b`（1.0.0 发布后），
+本地领先（iter-45 相关提交），因 DSH 沙箱 ssh 管道阻塞未推送；
+需在普通终端执行 `git push origin master`。`release/1.0.0` 分支保留。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`、发布 `release/<version>`。
 
 ## 7. 夜间自动化收尾（2026-10-23 06:00）
