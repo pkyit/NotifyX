@@ -111,6 +111,8 @@ mvn dependency:tree
 - 公钥：`docs/notifyx-release-key.asc`（同时上传 keyserver.ubuntu.com 与 keys.openpgp.org）。
 - 发布方式：`mvn -Prelease deploy` 上传 bundle，随后通过 Central Publisher API
   `POST /api/v1/publisher/deployment/{id}` 触发 publish；POM 保持 `autoPublish=false`。
+- 发布状态：2026-10-27 09:38:42 **PUBLISHED**；17 个模块的 POM/jar/sources/javadoc/asc
+  在 `repo1.maven.org` 均可访问。
 - 发布产物：17 个模块的 jar/pom（jar 模块含 sources/javadoc）与 `.asc` 签名。
 - 验证：`mvn dependency:get -Dartifact=io.github.pkyit:notifyx-core:1.0.0`，
   以及 Central 页面上的三个附件。

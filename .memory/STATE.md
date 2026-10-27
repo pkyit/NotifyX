@@ -182,8 +182,9 @@ sms4j 适配。
 - 发布密钥：`3E4342CF17F69E0FFC44BD240B40F80108F892C5`（`pkyit2 <pky1999@qq.com>`），
   公钥已上传 keyserver.ubuntu.com / keys.openpgp.org，并收录为 `docs/notifyx-release-key.asc`。
 - Central bundle：`703e22fd-430d-4529-8ab7-55694769a463`（`notifyx-1.0.0`）；
-  POM 保持 `autoPublish=false`，校验通过后按 Publisher API 手动 publish。
-- 发布后验证：等待 Central 索引，检查 `io.github.pkyit:notifyx-core:1.0.0` 的
-  POM/jar/sources/javadoc 与 `.asc`。
+  POM 保持 `autoPublish=false`，校验通过后按 Publisher API 手动 publish，
+  2026-10-27 09:38:42 状态 **PUBLISHED**。
+- 发布后验证：17 个模块的 POM/jar/sources/javadoc/asc 在 repo1.maven.org 全部 HTTP 200。
+- 额度告警：组织 Pkyit 月度 Release Size 额度已用尽，2026-11-01 前不能再发新版本。
 - demo：`notifyx-demo` 已本地建仓并提交 `51d09df`；Gitee 远程
   `pengkaiyan/notifyx-demo` 不存在，推送 404，待建空仓/令牌。
