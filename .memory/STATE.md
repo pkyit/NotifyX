@@ -138,7 +138,8 @@ sms4j 适配。
 ## 6. 当前分支
 
 `master`（iter-43 已合并；下一轮 iter-44 未开始）。工作区干净，
-本地 `master` 与 `origin/master` 已同步于 `b0f44f4`；后续如需推送，见 §9。
+`origin/master` 停在 `b0f44f4`；本次收尾文档提交 `f11b234` 尚未推送
+（DSH 沙箱 ssh 管道阻塞，需在普通终端 `git push origin master`）。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
 
 ## 7. 夜间自动化收尾（2026-10-23 06:00）
