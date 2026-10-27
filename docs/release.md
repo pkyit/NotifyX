@@ -117,4 +117,6 @@ mvn dependency:tree
 - 发布产物：17 个模块的 jar/pom（jar 模块含 sources/javadoc）与 `.asc` 签名。
 - 验证：`mvn dependency:get -Dartifact=io.github.pkyit:notifyx-core:1.0.0`，
   以及 Central 页面上的三个附件。
+- 消费端复测：`notifyx-demo` 删除本地 SDK jar 后，用无镜像 settings 从 Central 解析
+  `1.0.0` 并运行冒烟 **10/10**（Gitee `notifyx-demo` commit `fac375d`）。
 - 注意：`1.0.0` 不可撤回；后续修复必须发布新 patch 版本。

@@ -190,3 +190,5 @@ sms4j 适配。
 - 额度告警：组织 Pkyit 月度 Release Size 额度已用尽，2026-11-01 前不能再发新版本。
 - demo：`notifyx-demo` 已本地建仓并提交 `51d09df`，已推送到
   `git@gitee.com:pengkaiyan/notifyx-demo.git` 的 `master`。
+- 消费端 Central 复测：删除本地 SDK jar 后从 Central 解析 `1.0.0`，demo 冒烟 10/10；
+  复测提交 `fac375d`（Gitee `notifyx-demo`）。
