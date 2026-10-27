@@ -20,6 +20,7 @@ import io.github.pkyit.notifyx.core.model.RenderFormat;
 public final class NotifyContext {
 
     private final NotifyEvent event;
+    private final Map<String, Object> params;
     private final String renderedTitle;
     private final String renderedContent;
     private final RenderFormat renderFormat;
@@ -34,6 +35,9 @@ public final class NotifyContext {
 
     private NotifyContext(Builder builder) {
         this.event = Objects.requireNonNull(builder.event, "event");
+        this.params = builder.params == null
+                ? event.params()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(builder.params));
         this.renderedTitle = builder.renderedTitle;
         this.renderedContent = builder.renderedContent == null ? "" : builder.renderedContent;
         this.renderFormat = builder.renderFormat == null ? RenderFormat.PLAIN : builder.renderFormat;
@@ -59,6 +63,18 @@ public final class NotifyContext {
 
     public NotifyEvent event() {
         return event;
+    }
+
+    /**
+     * 渠道可见的业务参数。
+     *
+     * <p>默认等于 {@link NotifyEvent#params()}；当管线开启
+     * {@code mask.before-send} 时，这里是脱敏后的副本，原始事件保持不变。</p>
+     *
+     * @return 只读参数
+     */
+    public Map<String, Object> params() {
+        return params;
     }
 
     public String renderedTitle() {
@@ -148,6 +164,7 @@ public final class NotifyContext {
      */
     public NotifyContext withAttempt(int nextAttempt) {
         Builder builder = new Builder(event)
+                .params(params)
                 .renderedTitle(renderedTitle)
                 .renderedContent(renderedContent)
                 .renderFormat(renderFormat)
@@ -172,6 +189,7 @@ public final class NotifyContext {
     public static final class Builder {
 
         private final NotifyEvent event;
+        private Map<String, Object> params;
         private String renderedTitle;
         private String renderedContent;
         private RenderFormat renderFormat = RenderFormat.PLAIN;
@@ -186,6 +204,17 @@ public final class NotifyContext {
 
         private Builder(NotifyEvent event) {
             this.event = event;
+        }
+
+        /**
+         * 渠道可见的业务参数；不设置时等于 {@code event.params()}。
+         *
+         * @param params 参数（通常为脱敏副本）
+         * @return 构建器
+         */
+        public Builder params(Map<String, Object> params) {
+            this.params = params;
+            return this;
         }
 
         public Builder renderedTitle(String renderedTitle) {

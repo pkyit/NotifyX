@@ -298,6 +298,24 @@ class WebhookChannelTest {
                 .hasMessageContaining("invalid webhook request");
     }
 
+    @Test
+    @DisplayName("Webhook 使用 NotifyContext.params()，支持 before-send 脱敏副本")
+    void shouldUseContextParams() throws Exception {
+        NotifyEvent event = NotifyEvent.builder("ORDER_CREATE_FAIL")
+                .param("reason", "raw-secret")
+                .build();
+        NotifyContext ctx = NotifyContext.builder(event)
+                .params(Map.of("reason", "****"))
+                .renderedTitle("t")
+                .renderedContent("c")
+                .build();
+
+        new WebhookChannel(properties).send(ctx);
+
+        assertThat(capturedBody.get()).contains("\"reason\":\"****\"");
+        assertThat(capturedBody.get()).doesNotContain("raw-secret");
+    }
+
     private NotifyContext context() {
         NotifyEvent event = NotifyEvent.builder("ORDER_CREATE_FAIL")
                 .level(Level.ERROR)

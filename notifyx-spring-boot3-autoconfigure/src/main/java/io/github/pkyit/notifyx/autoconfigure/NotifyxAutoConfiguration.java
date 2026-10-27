@@ -365,6 +365,7 @@ public class NotifyxAutoConfiguration {
                 .tenant(properties.getTenant())
                 .maskBeforeAudit(properties.getMask().isBeforeAudit())
                 .maskEnabled(properties.getMask().isEnabled())
+                .maskBeforeSend(properties.getMask().isBeforeSend())
                 .circuitConfig(new NotifyPipeline.CircuitConfig(
                         properties.getChannels().getCircuitBreaker().getFailureThreshold(),
                         properties.getChannels().getCircuitBreaker().getOpenDuration(),

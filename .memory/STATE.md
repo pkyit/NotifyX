@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-28 01:05（iter-51：全部渠道禁用健康状态）
+> 更新时间：2026-10-28 02:05（iter-52：before-send 脱敏）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，295 测试执行 + 13 live 跳过（共 308 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，298 测试执行 + 13 live 跳过（共 311 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -27,8 +27,9 @@ attempts、全局 `retry.max-attempts` 真正封顶；iter-41 让 `notifyx.metri
 iter-48 补上 `notifyx.queue.size` 队列水位 gauge；iter-49 补上
 `notifyx.circuit.state` 熔断状态 gauge；iter-50 让关闭超时丢弃的任务逐个进入
 `queue.discarded`（shutdown）并打印前 20 条 level/key；iter-51 让全部渠道禁用时
-健康状态变为 DOWN、部分禁用为 DEGRADED。
-Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~51 是 **1.0.1 候选**，
+健康状态变为 DOWN、部分禁用为 DEGRADED；iter-52 让 `mask.before-send` 对渲染内容和
+渠道参数生效（`NotifyContext.params()`）。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~52 是 **1.0.1 候选**，
 Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计。
 
 ## 2. 已实现（按设计书章节）
@@ -103,6 +104,7 @@ Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计�
 - [x] **熔断状态指标** —— iter-49（`notifyx.circuit.state`，channel 标签）
 - [x] **关闭丢弃可见性** —— iter-50（shutdown 丢弃逐个计数 + 前 20 条日志）
 - [x] **全渠道禁用健康状态** —— iter-51（全部禁用 DOWN / 部分禁用 DEGRADED）
+- [x] **before-send 脱敏** —— iter-52（渲染内容 + `NotifyContext.params()`，默认关闭）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -224,9 +226,11 @@ sms4j 适配。
   全量 verify 306 用例（293 执行 + 13 live 跳过）。
 - iter-51：全部渠道禁用时健康状态 DOWN，部分禁用 DEGRADED 并列出 disabledChannels。
   全量 verify 308 用例（295 执行 + 13 live 跳过）。
+- iter-52：`mask.before-send` 对 renderedTitle/Content 与 `ctx.params()` 生效；默认关闭。
+  全量 verify 311 用例（298 执行 + 13 live 跳过）。
 - 未改版本号；1.0.0 已发布且 Central 额度 2026-11-01 前不可发新版本，本修复作为
   **1.0.1 候选**。
 - 新增 ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，
   Spring 环境下前者不可达。需要用户决定“废弃前者”还是“明确优先级并停止 scene 默认填充”。
 - 邮件凭据仍缺 `NOTIFYX_SMTP_PASSWORD`（HOST/PORT/SSL/USER/FROM 已注入），
-  无法发信/收信；`mask.before-send` 与 envelope 落盘脱敏仍属 A07 未完成。
+  无法发信/收信；失败落盘 envelope 的 params 脱敏仍属 A07 未完成。
