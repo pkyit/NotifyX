@@ -1,10 +1,11 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-28 03:05（iter-53：失败落盘 envelope 脱敏）
+> 更新时间：2026-10-28 06:00（夜间巡检收尾）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，299 测试执行 + 13 live 跳过（共 312 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，299 测试执行 + 13 live 跳过（共 312 用例）；`mvn -Prelease -Dgpg.skip=true package`
+> 需在普通终端复验（本沙箱 javadoc 目标目录不可写，见 `env.md` §13）。
 
 ## 1. 一句话现状
 
@@ -241,3 +242,22 @@ sms4j 适配。
 - 04:00 release profile 审计：`mvn -Prelease -Dgpg.skip=true clean package` 在
   `notifyx-core` 的 javadoc 阶段失败（`Destination directory not writable`），
   属 DSH 沙箱子进程写入限制，见 `env.md` §13；1.0.1 发布前需在普通终端重跑 release build。
+
+## 12. 2026-10-28 夜间巡检收尾（06:00）
+
+- **本轮范围**：19:00–06:00 共 9 个候选修复（iter-45~53）+ 1 次 release profile 审计；
+  全部在 `master` 以 `--no-ff` 合并。
+- **最终验证**：05:00 复跑 `mvn -B -ntp clean verify` → BUILD SUCCESS，
+  17 模块，312 用例（299 执行 + 13 live 跳过），0 failure / 0 error。
+- **代码状态**：工作区干净；本地 `master` 领先 `origin/master` 20 个提交（收尾文档提交后 21 个）。
+  沙箱无法 push，需在普通终端执行 `git push origin master`。
+- **发布状态**：版本号仍为 `1.0.0`；1.0.0 已发布，iter-45~53 是 **1.0.1 候选**。
+  Central 额度 2026-11-01 前不可发新版本；发布前需普通终端跑
+  `mvn -Prelease -Dgpg.skip=true clean package`（本沙箱 javadoc 受限，见 `env.md` §13）。
+- **未决事项**：
+  1. ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，需决策；
+  2. A02/A03（失败记录粒度/定向重投）、A04（NO_ROUTE 语义）、A06 完整方案（任务携带事件落盘）、
+     A14（去重存储故障 fail-open/closed）均需设计决策，本轮未擅自实施；
+  3. `NOTIFYX_SMTP_PASSWORD` 缺失，决策邮件无法发送；也未收到可读取的邮件回复。
+- **下一步**：用户 push → 决策 ISSUE-039 / A02/A03/A04/A14 → 2026-11-01 后按
+  1.0.1 流程复验并发布；06:00 后不再发起跨时段代码改动。
