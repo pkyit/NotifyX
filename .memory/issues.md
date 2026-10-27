@@ -458,3 +458,12 @@
   `WebhookChannelTest.shouldUseContextParams`；修复前标题/正文/params 均未脱敏。
 - **关闭方式**：`NotifyContext` 增加 `params()` 脱敏副本；Pipeline 在开启时对
   renderedTitle/Content 走 `maskText`、对 params 走 `maskParams`；Webhook 使用 `ctx.params()`。
+
+## ISSUE-047 失败落盘 envelope 的 params 未脱敏
+- **状态**：CLOSED（iter-53）
+- **现象**：`NotifyEnvelope.of(event, ...)` 直接序列化 `event.params()`；
+  LocalFile/JDBC 失败存储里能看到手机号、邮箱、业务敏感参数。
+- **证据**：`FailurePersistenceTest.shouldMaskEnvelopeParamsBeforePersist`；
+  修复前 envelope.params 为原文。
+- **关闭方式**：新增 `mask.before-persist`（默认 false）；`NotifyEnvelope.withParams`
+  替换 params；Pipeline 在开关开启时对 envelope.params 调 `maskParams`。
