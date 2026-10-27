@@ -1,6 +1,7 @@
 package io.github.pkyit.notifyx.spring.executor;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -130,8 +131,16 @@ public final class PriorityNotifyExecutor implements NotifyTaskExecutor, Disposa
         pool.shutdown();
         try {
             if (!pool.awaitTermination(shutdownAwait.toMillis(), TimeUnit.MILLISECONDS)) {
-                int remaining = pool.shutdownNow().size();
-                log.warn("notifyx shutdown timeout, {} tasks dropped from queue", remaining);
+                List<Runnable> dropped = pool.shutdownNow();
+                for (int i = 0; i < dropped.size(); i++) {
+                    if (dropped.get(i) instanceof PriorityTask task) {
+                        metrics.queueDiscarded("shutdown", task.level());
+                        if (i < 20) {
+                            log.warn("notifyx shutdown dropped event level={} key={}", task.level(), task.taskKey);
+                        }
+                    }
+                }
+                log.warn("notifyx shutdown timeout, {} tasks dropped from queue", dropped.size());
             }
         } catch (InterruptedException ex) {
             pool.shutdownNow();
