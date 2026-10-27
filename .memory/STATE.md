@@ -138,8 +138,8 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`release/1.0.0`（基于 `master` `cf9bb1c`；iter-44 发布准备，待合并）。
-`master` 仍停在 `cf9bb1c`；发布完成后按 `--no-ff` 合并并推送。
+`master`（iter-44 已合并并推送到 `origin/master`，合并提交 `9f3daa9`；
+`release/1.0.0` 分支保留）。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`、发布 `release/<version>`。
 
 ## 7. 夜间自动化收尾（2026-10-23 06:00）
@@ -185,6 +185,7 @@ sms4j 适配。
   POM 保持 `autoPublish=false`，校验通过后按 Publisher API 手动 publish，
   2026-10-27 09:38:42 状态 **PUBLISHED**。
 - 发布后验证：17 个模块的 POM/jar/sources/javadoc/asc 在 repo1.maven.org 全部 HTTP 200。
+- `master` 合并提交 `9f3daa9` 已推送到 `origin/master`（Gitee）。
 - 额度告警：组织 Pkyit 月度 Release Size 额度已用尽，2026-11-01 前不能再发新版本。
 - demo：`notifyx-demo` 已本地建仓并提交 `51d09df`；Gitee 远程
   `pengkaiyan/notifyx-demo` 不存在，推送 404，待建空仓/令牌。
