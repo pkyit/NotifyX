@@ -450,3 +450,11 @@
   `shouldReportDegradedWhenSomeChannelsDisabled`；修复前全部禁用不是 DOWN。
 - **关闭方式**：检查所有渠道的 `isEnabled(null)`；全部禁用 → DOWN，
   部分禁用 → DEGRADED，并在 details 中列出 `disabledChannels`。
+
+## ISSUE-046 `mask.before-send` 绑定后不生效，渠道仍收到原文
+- **状态**：CLOSED（iter-52）
+- **现象**：Pipeline 从不读取 `beforeSend`；模板渲染内容与 webhook `params` 都是原文。
+- **证据**：`MaskEnabledTest.shouldMaskBeforeSend`、
+  `WebhookChannelTest.shouldUseContextParams`；修复前标题/正文/params 均未脱敏。
+- **关闭方式**：`NotifyContext` 增加 `params()` 脱敏副本；Pipeline 在开启时对
+  renderedTitle/Content 走 `maskText`、对 params 走 `maskParams`；Webhook 使用 `ctx.params()`。

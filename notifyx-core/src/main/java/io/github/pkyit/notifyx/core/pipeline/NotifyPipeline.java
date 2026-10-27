@@ -70,6 +70,7 @@ public final class NotifyPipeline {
     private final String tenant;
     private final boolean maskBeforeAudit;
     private final boolean maskEnabled;
+    private final boolean maskBeforeSend;
     private final DeferredHandler deferredHandler;
     private final Map<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final CircuitConfig circuitConfig;
@@ -103,6 +104,7 @@ public final class NotifyPipeline {
         this.tenant = builder.tenant;
         this.maskBeforeAudit = builder.maskBeforeAudit;
         this.maskEnabled = builder.maskEnabled;
+        this.maskBeforeSend = builder.maskBeforeSend;
         this.deferredHandler = builder.deferredHandler;
         this.circuitConfig = builder.circuitConfig;
         this.traceContext = builder.traceContext == null ? TraceContext.none() : builder.traceContext;
@@ -255,7 +257,14 @@ public final class NotifyPipeline {
             return failBeforeSend(event, level, channel, receiver,
                     SendResult.nonRetryable(reason, Duration.ZERO), dedupeKey);
         }
+        Map<String, Object> channelParams = event.params();
+        if (maskEnabled && maskBeforeSend && masker != null) {
+            renderedTitle = masker.maskText(renderedTitle);
+            renderedContent = masker.maskText(renderedContent);
+            channelParams = masker.maskParams(event.params());
+        }
         NotifyContext baseContext = NotifyContext.builder(event)
+                .params(channelParams)
                 .renderedTitle(renderedTitle)
                 .renderedContent(renderedContent)
                 .renderFormat(channel.preferredFormat())
@@ -667,6 +676,7 @@ public final class NotifyPipeline {
         private String tenant = "default";
         private boolean maskBeforeAudit = true;
         private boolean maskEnabled = true;
+        private boolean maskBeforeSend;
         private DeferredHandler deferredHandler;
         private CircuitConfig circuitConfig = CircuitConfig.defaults();
         private TraceContext traceContext = TraceContext.none();
@@ -771,6 +781,17 @@ public final class NotifyPipeline {
          */
         public Builder maskEnabled(boolean maskEnabled) {
             this.maskEnabled = maskEnabled;
+            return this;
+        }
+
+        /**
+         * 是否在渠道发送前脱敏渲染内容与业务参数。
+         *
+         * @param maskBeforeSend 是否开启
+         * @return 构建器
+         */
+        public Builder maskBeforeSend(boolean maskBeforeSend) {
+            this.maskBeforeSend = maskBeforeSend;
             return this;
         }
 

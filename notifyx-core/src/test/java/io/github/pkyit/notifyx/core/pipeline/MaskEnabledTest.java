@@ -86,17 +86,55 @@ class MaskEnabledTest {
         assertThat(audit.records.get(0).errorMsg()).doesNotContain("alice@example.com");
     }
 
+    @Test
+    @DisplayName("mask.before-send=true 时渲染内容与业务参数都脱敏，原事件不变")
+    void shouldMaskBeforeSend() {
+        NotifyEvent event = NotifyEvent.builder("SCENE_A")
+                .param("phone", "13812345678")
+                .param("note", "alice@example.com")
+                .build();
+
+        pipeline(true, true).handle(event);
+
+        NotifyContext ctx = channel.contexts.get(0);
+        assertThat(ctx.renderedTitle()).isEqualTo("phone=138****5678");
+        assertThat(ctx.renderedContent()).isEqualTo("email=a***@example.com");
+        assertThat(ctx.params().get("phone")).isEqualTo("138****5678");
+        assertThat(event.params().get("phone")).isEqualTo("13812345678");
+    }
+
+    @Test
+    @DisplayName("mask.before-send=false（默认）时渠道看到原文")
+    void shouldNotMaskBeforeSendByDefault() {
+        NotifyEvent event = NotifyEvent.builder("SCENE_A")
+                .param("phone", "13812345678")
+                .param("note", "alice@example.com")
+                .build();
+
+        pipeline(true, false).handle(event);
+
+        NotifyContext ctx = channel.contexts.get(0);
+        assertThat(ctx.renderedTitle()).isEqualTo("phone=13812345678");
+        assertThat(ctx.renderedContent()).isEqualTo("email=alice@example.com");
+        assertThat(ctx.params().get("phone")).isEqualTo("13812345678");
+    }
+
     private NotifyPipeline pipeline(boolean maskEnabled) {
+        return pipeline(maskEnabled, false);
+    }
+
+    private NotifyPipeline pipeline(boolean maskEnabled, boolean maskBeforeSend) {
         SceneConfig scene = SceneConfig.builder("SCENE_A").channels(List.of("recording")).build();
         return NotifyPipeline.builder()
                 .sceneRegistry(SceneRegistry.of(Map.of(scene.scene(), scene), SceneRegistry.emptyDefaults()))
                 .channelRegistry(ChannelRegistry.of(List.of(channel)))
                 .templateEngine(new SimpleTemplateEngine())
-                .templates(Map.of("default", new MessageTemplate("default", "t", "${content}")))
+                .templates(Map.of("default", new MessageTemplate("default", "phone=${phone}", "email=${note}")))
                 .auditRecorder(audit)
                 .masker(new DefaultMasker())
                 .maskBeforeAudit(true)
                 .maskEnabled(maskEnabled)
+                .maskBeforeSend(maskBeforeSend)
                 .retryPolicy(new RetryPolicy(1, Duration.ofMillis(1), Duration.ofMillis(1), 0.0))
                 .build();
     }
@@ -110,6 +148,7 @@ class MaskEnabledTest {
 
     private static final class RecordingChannel implements NotifyChannel {
 
+        private final List<NotifyContext> contexts = new CopyOnWriteArrayList<>();
         private volatile boolean fail;
 
         @Override
@@ -122,6 +161,7 @@ class MaskEnabledTest {
             if (fail) {
                 throw new ChannelTimeoutException("recording", new IllegalStateException("failed for alice@example.com"));
             }
+            contexts.add(ctx);
             return SendResult.success("1", null, Duration.ZERO);
         }
     }

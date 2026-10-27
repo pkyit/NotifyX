@@ -172,7 +172,7 @@ public class WebhookChannel implements NotifyChannel {
         builder.append("\"occurredAt\":").append(ctx.event().occurredAt()).append(',');
         builder.append("\"attempt\":").append(ctx.attempt()).append(',');
         builder.append("\"tags\":").append(jsonMap(ctx.event().tags())).append(',');
-        builder.append("\"params\":").append(jsonMap(ctx.event().params())).append('}');
+        builder.append("\"params\":").append(jsonMap(ctx.params())).append('}');
         return builder.toString();
     }
 
