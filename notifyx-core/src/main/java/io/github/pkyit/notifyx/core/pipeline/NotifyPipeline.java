@@ -417,14 +417,24 @@ public final class NotifyPipeline {
             return;
         }
         String maskedReceiver = receiver;
-        if (maskEnabled && maskBeforeAudit && receiver != null && masker != null) {
-            maskedReceiver = masker.maskReceiver(receiver);
+        String maskedBizId = event.bizId();
+        String failureReason = result == null ? null : result.failureReason();
+        if (maskEnabled && maskBeforeAudit && masker != null) {
+            if (receiver != null) {
+                maskedReceiver = masker.maskReceiver(receiver);
+            }
+            if (maskedBizId != null) {
+                maskedBizId = masker.maskText(maskedBizId);
+            }
+            if (failureReason != null) {
+                failureReason = masker.maskText(failureReason);
+            }
         }
         try {
             auditRecorder.record(new AuditRecord(event.eventId(), event.scene(), level.name(),
-                    event.bizId(), channel, maskedReceiver,
+                    maskedBizId, channel, maskedReceiver,
                     result == null ? "UNKNOWN" : result.status().name(),
-                    result == null ? null : result.failureReason(),
+                    failureReason,
                     attempts, cost.toMillis(), instanceId,
                     resolveTraceId(event), System.currentTimeMillis(),
                     result != null && result.status() == SendResult.Status.SUCCESS

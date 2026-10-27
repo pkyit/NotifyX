@@ -396,3 +396,12 @@
   2. 明确优先级 `event > scene > dedupe.default-window > defaults.silent-window`，
      并让 autoconfigure 不再无条件把 defaults 写入 scene。
   需要用户确认后再改，避免 1.0.1 引入新的配置语义。
+
+## ISSUE-040 审计 bizId / errorMsg 未脱敏，maskText 只处理身份证
+- **状态**：CLOSED（iter-46）
+- **现象**：`mask.before-audit=true` 时只脱敏 receiver；`AuditRecord.bizId` 与 `errorMsg`
+  原样写入。`DefaultMasker.maskText` 只匹配身份证号，手机号/邮箱仍泄漏。
+- **证据**：`DefaultMaskerTest.shouldMaskTextPhoneAndEmail`、
+  `MaskEnabledTest.shouldMaskBizId` / `shouldMaskFailureReason`；修复前 bizId/errorMsg 为原文。
+- **关闭方式**：`maskText` 扩展手机号/邮箱/身份证三类正则；Pipeline 在开启脱敏时
+  对 bizId 与 errorMsg 调用 `maskText`。
