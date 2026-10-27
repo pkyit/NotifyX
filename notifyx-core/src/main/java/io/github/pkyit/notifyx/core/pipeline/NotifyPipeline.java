@@ -67,6 +67,7 @@ public final class NotifyPipeline {
     private final RetryPolicy retryPolicy;
     private final String instanceId;
     private final boolean maskBeforeAudit;
+    private final boolean maskEnabled;
     private final DeferredHandler deferredHandler;
     private final Map<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final CircuitConfig circuitConfig;
@@ -97,6 +98,7 @@ public final class NotifyPipeline {
         this.retryPolicy = builder.retryPolicy;
         this.instanceId = builder.instanceId;
         this.maskBeforeAudit = builder.maskBeforeAudit;
+        this.maskEnabled = builder.maskEnabled;
         this.deferredHandler = builder.deferredHandler;
         this.circuitConfig = builder.circuitConfig;
         this.traceContext = builder.traceContext == null ? TraceContext.none() : builder.traceContext;
@@ -415,8 +417,8 @@ public final class NotifyPipeline {
             return;
         }
         String maskedReceiver = receiver;
-        if (maskBeforeAudit && receiver != null && masker != null) {
-            maskedReceiver = masker.maskText(receiver);
+        if (maskEnabled && maskBeforeAudit && receiver != null && masker != null) {
+            maskedReceiver = masker.maskReceiver(receiver);
         }
         try {
             auditRecorder.record(new AuditRecord(event.eventId(), event.scene(), level.name(),
@@ -639,6 +641,7 @@ public final class NotifyPipeline {
         private RetryPolicy retryPolicy = RetryPolicy.defaults();
         private String instanceId = "unknown";
         private boolean maskBeforeAudit = true;
+        private boolean maskEnabled = true;
         private DeferredHandler deferredHandler;
         private CircuitConfig circuitConfig = CircuitConfig.defaults();
         private TraceContext traceContext = TraceContext.none();
@@ -710,6 +713,17 @@ public final class NotifyPipeline {
 
         public Builder maskBeforeAudit(boolean maskBeforeAudit) {
             this.maskBeforeAudit = maskBeforeAudit;
+            return this;
+        }
+
+        /**
+         * 脱敏总开关；false 时审计中的 receiver 不再脱敏。
+         *
+         * @param maskEnabled 是否启用脱敏
+         * @return 构建器
+         */
+        public Builder maskEnabled(boolean maskEnabled) {
+            this.maskEnabled = maskEnabled;
             return this;
         }
 

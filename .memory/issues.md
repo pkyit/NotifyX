@@ -372,3 +372,27 @@
 - **证据**：`RetryConfigurationTest`；修复前关闭开关仍调用失败渠道 3 次。
 - **关闭方式**：`enabled=false` 时 RetryPolicy 的 maxAttempts 取 1；
   渠道/场景只能进一步降低，不会放大。
+
+## ISSUE-038 `mask.enabled` 不生效，审计中的手机号/邮箱 receiver 未脱敏
+- **状态**：CLOSED（iter-45）
+- **现象**：`notifyx.mask.enabled` 只绑定，`NotifyPipeline.audit()` 只看 `maskBeforeAudit`；
+  且 receiver 走 `masker.maskText()`，`DefaultMasker.maskText` 只处理身份证号，
+  手机号/邮箱原样进入审计记录。
+- **证据**：`MaskEnabledTest` 3 个用例；修复前 `13812345678` 在审计中保持原样，
+  `mask.enabled=false` 也仍会执行 `maskText`。
+- **关闭方式**：Pipeline 增加 `maskEnabled`，审计条件同时检查总开关；
+  `Masker.maskReceiver` 按内容选择邮箱/手机号/文本兜底。
+
+## ISSUE-039 `dedupe.default-window` 与 `defaults.silent-window` 语义冲突
+- **状态**：OPEN（需用户/架构决策）
+- **现象**：`notifyx.dedupe.default-window` 只作为 pipeline 在事件/场景都未配置窗口时的 fallback；
+  但 `NotifyxAutoConfiguration` 总是用 `notifyx.defaults.silent-window`（默认 5m）填充每个场景，
+  所以 Spring 环境下 `dedupe.default-window` 实际不可达。
+- **证据**：2026-10-27 19:00 尝试用 `notifyx.dedupe.default-window=30ms` 写
+  `DedupeDefaultWindowTest`，场景仍继承 5m，第三个事件仍被 DEDUPED；实验代码已回退，未提交。
+- **影响**：与 A12 同类，配置看起来可调、运行时无效；用户无法判断应该改哪一个。
+- **建议**：二选一：
+  1. 删除/`@Deprecated` `dedupe.default-window`，文档明确用 `defaults.silent-window`；
+  2. 明确优先级 `event > scene > dedupe.default-window > defaults.silent-window`，
+     并让 autoconfigure 不再无条件把 defaults 写入 scene。
+  需要用户确认后再改，避免 1.0.1 引入新的配置语义。
