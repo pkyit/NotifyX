@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-27 20:05（iter-46：审计文本脱敏）
+> 更新时间：2026-10-27 21:05（iter-47：env/tenant 模板参数）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，288 测试执行 + 13 live 跳过（共 301 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，289 测试执行 + 13 live 跳过（共 302 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -23,8 +23,8 @@ attempts、全局 `retry.max-attempts` 真正封顶；iter-41 让 `notifyx.metri
 `prefix` 真正生效；iter-42 让 Redis 去重 TTL 使用毫秒精度；iter-43 让
 `notifyx.retry.enabled=false` 真正只尝试一次；iter-45 让 `mask.enabled` 生效，
 并让审计中的手机号/邮箱 receiver 按类型脱敏；iter-46 让审计 bizId/errorMsg
-以及文本中的手机号/邮箱也脱敏。
-Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45/46 是 **1.0.1 候选**，
+以及文本中的手机号/邮箱也脱敏；iter-47 让 `env`/`tenant` 进入模板参数。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~47 是 **1.0.1 候选**，
 Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计。
 
 ## 2. 已实现（按设计书章节）
@@ -94,6 +94,7 @@ Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计�
 - [x] **NotifyX 1.0.0 发布** —— iter-44（17 模块、sources/javadoc/GPG、Central Portal）
 - [x] **脱敏总开关与 receiver 脱敏** —— iter-45（`mask.enabled` 生效；手机号/邮箱按类型脱敏）
 - [x] **审计文本脱敏** —— iter-46（bizId/errorMsg 及文本中的手机号/邮箱）
+- [x] **env/tenant 模板参数** —— iter-47（`${env}` / `${tenant}` 可渲染）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -205,6 +206,8 @@ sms4j 适配。
   （`Masker.maskReceiver`）。全量 verify 298 用例（285 执行 + 13 live 跳过）。
 - iter-46：`maskText` 扩展手机号/邮箱/身份证三类正则；审计 bizId/errorMsg 也走脱敏。
   全量 verify 301 用例（288 执行 + 13 live 跳过）。
+- iter-47：`env` / `tenant` 进入模板参数（`${env}` / `${tenant}`）。
+  全量 verify 302 用例（289 执行 + 13 live 跳过）。
 - 未改版本号；1.0.0 已发布且 Central 额度 2026-11-01 前不可发新版本，本修复作为
   **1.0.1 候选**。
 - 新增 ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，

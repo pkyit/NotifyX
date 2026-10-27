@@ -66,6 +66,8 @@ public final class NotifyPipeline {
     private final NotifyMetrics metrics;
     private final RetryPolicy retryPolicy;
     private final String instanceId;
+    private final String env;
+    private final String tenant;
     private final boolean maskBeforeAudit;
     private final boolean maskEnabled;
     private final DeferredHandler deferredHandler;
@@ -97,6 +99,8 @@ public final class NotifyPipeline {
         this.metrics = builder.metrics;
         this.retryPolicy = builder.retryPolicy;
         this.instanceId = builder.instanceId;
+        this.env = builder.env;
+        this.tenant = builder.tenant;
         this.maskBeforeAudit = builder.maskBeforeAudit;
         this.maskEnabled = builder.maskEnabled;
         this.deferredHandler = builder.deferredHandler;
@@ -569,6 +573,8 @@ public final class NotifyPipeline {
         params.putIfAbsent("eventId", event.eventId());
         params.putIfAbsent("occurredAt", Instant.ofEpochMilli(event.occurredAt()).toString());
         params.putIfAbsent("instanceId", instanceId == null ? "" : instanceId);
+        params.putIfAbsent("env", env == null ? "" : env);
+        params.putIfAbsent("tenant", tenant == null ? "" : tenant);
         params.putIfAbsent("traceId", event.tag("traceId") == null ? "" : event.tag("traceId"));
         params.putIfAbsent("params", event.params());
         params.putIfAbsent("content", event.title() == null ? "" : event.title());
@@ -650,6 +656,8 @@ public final class NotifyPipeline {
         private NotifyMetrics metrics = NotifyMetrics.noop();
         private RetryPolicy retryPolicy = RetryPolicy.defaults();
         private String instanceId = "unknown";
+        private String env = "prod";
+        private String tenant = "default";
         private boolean maskBeforeAudit = true;
         private boolean maskEnabled = true;
         private DeferredHandler deferredHandler;
@@ -718,6 +726,28 @@ public final class NotifyPipeline {
 
         public Builder instanceId(String instanceId) {
             this.instanceId = instanceId;
+            return this;
+        }
+
+        /**
+         * 环境标识，作为 {@code ${env}} 渲染参数。
+         *
+         * @param env 环境，null 回退 {@code prod}
+         * @return 构建器
+         */
+        public Builder env(String env) {
+            this.env = env == null ? "prod" : env;
+            return this;
+        }
+
+        /**
+         * 租户标识，作为 {@code ${tenant}} 渲染参数。
+         *
+         * @param tenant 租户，null 回退 {@code default}
+         * @return 构建器
+         */
+        public Builder tenant(String tenant) {
+            this.tenant = tenant == null ? "default" : tenant;
             return this;
         }
 

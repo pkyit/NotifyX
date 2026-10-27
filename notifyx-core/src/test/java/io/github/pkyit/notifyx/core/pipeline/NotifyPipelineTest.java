@@ -112,6 +112,28 @@ class NotifyPipelineTest {
         assertThat(audit.records.get(0).attempts()).isZero();
     }
 
+    @Test
+    @DisplayName("env/tenant 进入模板渲染参数")
+    void shouldRenderEnvAndTenant() {
+        SceneConfig scene = SceneConfig.builder("SCENE_A").channels(List.of("recording")).build();
+        NotifyPipeline pipeline = NotifyPipeline.builder()
+                .sceneRegistry(SceneRegistry.of(Map.of(scene.scene(), scene), SceneRegistry.emptyDefaults()))
+                .channelRegistry(ChannelRegistry.of(List.of(channel)))
+                .templateEngine(new SimpleTemplateEngine())
+                .templates(Map.of("default",
+                        new MessageTemplate("default", "[${env}] ${tenant}", "${tenant}")))
+                .auditRecorder(audit)
+                .env("staging")
+                .tenant("acme")
+                .build();
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A").build());
+
+        assertThat(channel.contexts).hasSize(1);
+        assertThat(channel.contexts.get(0).renderedTitle()).isEqualTo("[staging] acme");
+        assertThat(channel.contexts.get(0).renderedContent()).isEqualTo("acme");
+    }
+
     private NotifyPipeline pipeline(List<EventFilter> filters, SceneConfig sceneConfig) {
         return NotifyPipeline.builder()
                 .sceneRegistry(SceneRegistry.of(Map.of(sceneConfig.scene(), sceneConfig), SceneRegistry.emptyDefaults()))
@@ -127,6 +149,7 @@ class NotifyPipelineTest {
     private static final class RecordingChannel implements NotifyChannel {
 
         private final List<String> receivers = new CopyOnWriteArrayList<>();
+        private final List<NotifyContext> contexts = new CopyOnWriteArrayList<>();
         private final java.util.concurrent.atomic.AtomicBoolean failFirst = new java.util.concurrent.atomic.AtomicBoolean();
         private final java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -142,6 +165,7 @@ class NotifyPipelineTest {
                 throw new io.github.pkyit.notifyx.core.exception.ChannelTimeoutException("recording", null);
             }
             receivers.add(ctx.receiver());
+            contexts.add(ctx);
             return SendResult.success("1", null, Duration.ZERO);
         }
     }
