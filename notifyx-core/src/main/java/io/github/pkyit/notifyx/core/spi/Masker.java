@@ -58,4 +58,28 @@ public interface Masker {
      * @return 脱敏文本
      */
     String maskText(String text);
+
+    /**
+     * 接收人脱敏：按内容选择邮箱 / 手机号 / 文本兜底策略。
+     *
+     * <p>审计记录里的 receiver 在开启 {@code mask.before-audit} 时使用本方法，
+     * 避免把手机号当普通文本而漏脱敏。</p>
+     *
+     * @param receiver 接收人，可为 null
+     * @return 脱敏后的接收人
+     * @since 1.0
+     */
+    default String maskReceiver(String receiver) {
+        if (receiver == null) {
+            return null;
+        }
+        String trimmed = receiver.trim();
+        if (trimmed.contains("@")) {
+            return maskEmail(trimmed);
+        }
+        if (trimmed.matches("\\+?\\d[\\d\\s-]{6,}")) {
+            return maskPhone(trimmed);
+        }
+        return maskText(trimmed);
+    }
 }

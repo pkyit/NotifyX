@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-27 09:35（iter-44：NotifyX 1.0.0 发布）
+> 更新时间：2026-10-27 19:12（iter-45：脱敏总开关与接收人脱敏）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，282 测试执行 + 13 live 跳过（共 295 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
+> 17 个模块，285 测试执行 + 13 live 跳过（共 298 用例）；`mvn -Prelease -Dgpg.skip=true package` 通过，两个 starter 均有 sources/javadoc。
 
 ## 1. 一句话现状
 
@@ -21,8 +21,10 @@ iter-38 加固了 `JsonCodec` 的非法 Unicode 与超深嵌套处理；iter-39 
 iter-40 修复了 `@AlarmProtect` 数组参数导致的去重失效，并让审计/失败落盘记录真实
 attempts、全局 `retry.max-attempts` 真正封顶；iter-41 让 `notifyx.metrics.enabled` /
 `prefix` 真正生效；iter-42 让 Redis 去重 TTL 使用毫秒精度；iter-43 让
-`notifyx.retry.enabled=false` 真正只尝试一次。
-Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
+`notifyx.retry.enabled=false` 真正只尝试一次；iter-45 让 `mask.enabled` 生效，
+并让审计中的手机号/邮箱 receiver 按类型脱敏。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45 是 **1.0.1 候选**，
+Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计。
 
 ## 2. 已实现（按设计书章节）
 
@@ -89,6 +91,7 @@ Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；P2+ 目标见 iter
 - [x] **Redis 去重 TTL 精度** —— iter-42（`SET NX PX`，亚秒窗口不再被放大）
 - [x] **retry.enabled 生效** —— iter-43（关闭后每个渠道只尝试一次）
 - [x] **NotifyX 1.0.0 发布** —— iter-44（17 模块、sources/javadoc/GPG、Central Portal）
+- [x] **脱敏总开关与 receiver 脱敏** —— iter-45（`mask.enabled` 生效；手机号/邮箱按类型脱敏）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -192,3 +195,14 @@ sms4j 适配。
   `git@gitee.com:pengkaiyan/notifyx-demo.git` 的 `master`。
 - 消费端 Central 复测：删除本地 SDK jar 后从 Central 解析 `1.0.0`，demo 冒烟 10/10；
   复测提交 `fac375d`（Gitee `notifyx-demo`）。
+
+## 11. 1.0.1 候选修复（2026-10-27 19:00 起）
+
+- iter-45：`notifyx.mask.enabled` 生效；审计中的手机号/邮箱 receiver 按类型脱敏
+  （`Masker.maskReceiver`）。全量 verify 298 用例（285 执行 + 13 live 跳过）。
+- 未改版本号；1.0.0 已发布且 Central 额度 2026-11-01 前不可发新版本，本修复作为
+  **1.0.1 候选**。
+- 新增 ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，
+  Spring 环境下前者不可达。需要用户决定“废弃前者”还是“明确优先级并停止 scene 默认填充”。
+- 邮件凭据仍缺 `NOTIFYX_SMTP_PASSWORD`（HOST/PORT/SSL/USER/FROM 已注入），
+  无法发信/收信；`mask.before-send` 与 envelope 落盘脱敏仍属 A07 未完成。

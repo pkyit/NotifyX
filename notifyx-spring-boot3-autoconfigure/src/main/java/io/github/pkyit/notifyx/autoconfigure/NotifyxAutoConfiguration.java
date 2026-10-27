@@ -362,6 +362,7 @@ public class NotifyxAutoConfiguration {
                         properties.getRetry().getJitter()))
                 .instanceId(resolveInstanceId(properties, environment))
                 .maskBeforeAudit(properties.getMask().isBeforeAudit())
+                .maskEnabled(properties.getMask().isEnabled())
                 .circuitConfig(new NotifyPipeline.CircuitConfig(
                         properties.getChannels().getCircuitBreaker().getFailureThreshold(),
                         properties.getChannels().getCircuitBreaker().getOpenDuration(),
