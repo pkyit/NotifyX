@@ -56,6 +56,14 @@ public interface NotifyMetrics {
     }
 
     /**
+     * 队列当前水位。
+     *
+     * @param size 队列长度
+     */
+    default void queueSize(int size) {
+    }
+
+    /**
      * no-op 实现。
      *
      * @return 指标出口

@@ -103,6 +103,17 @@ class MicrometerNotifyMetricsTest {
     }
 
     @Test
+    @DisplayName("队列水位 gauge 可更新，负值归零")
+    void shouldRecordQueueSize() {
+        metrics.queueSize(7);
+
+        assertThat(registry.get("notifyx.queue.size").gauge().value()).isEqualTo(7.0);
+
+        metrics.queueSize(-1);
+        assertThat(registry.get("notifyx.queue.size").gauge().value()).isZero();
+    }
+
+    @Test
     @DisplayName("指标名统一 notifyx. 前缀且不使用 receiver/bizId 等高基数标签")
     void shouldKeepLowCardinality() {
         NotifyEvent event = NotifyEvent.builder("S1").bizId("BIZ-1").build();

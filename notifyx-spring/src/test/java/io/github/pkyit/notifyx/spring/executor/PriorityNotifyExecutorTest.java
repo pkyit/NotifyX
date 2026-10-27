@@ -122,6 +122,17 @@ class PriorityNotifyExecutorTest {
         assertThat(executor.queueSize()).isZero();
     }
 
+    @Test
+    @DisplayName("入队后上报队列水位")
+    void shouldReportQueueSize() throws Exception {
+        executor = newExecutor(1, 8);
+
+        executor.execute(Level.INFO, "one", () -> executed.add("one"));
+
+        awaitExecuted(1);
+        assertThat(metrics.queueSizes).isNotEmpty();
+    }
+
     private PriorityNotifyExecutor newExecutor(int corePoolSize, int capacity) {
         return new PriorityNotifyExecutor(corePoolSize, corePoolSize, capacity, Duration.ofSeconds(5),
                 "test-executor-", metrics, Duration.ofSeconds(2));
@@ -146,10 +157,16 @@ class PriorityNotifyExecutorTest {
     private static final class RecordingMetrics implements NotifyMetrics {
 
         private final List<String> discardedReasons = new CopyOnWriteArrayList<>();
+        private final List<Integer> queueSizes = new CopyOnWriteArrayList<>();
 
         @Override
         public void queueDiscarded(String reason, Level level) {
             discardedReasons.add(reason);
+        }
+
+        @Override
+        public void queueSize(int size) {
+            queueSizes.add(size);
         }
     }
 }
