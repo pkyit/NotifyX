@@ -97,6 +97,51 @@ class NotifyxHealthIndicatorTest {
                 .run(context -> assertThat(context).doesNotHaveBean(NotifyxHealthIndicator.class));
     }
 
+    @Test
+    @DisplayName("所有渠道都 isEnabled=false → DOWN")
+    void shouldReportDownWhenAllChannelsDisabled() {
+        NotifyxHealthIndicator indicator = new NotifyxHealthIndicator(new NotifyxProperties(),
+                List.of(new DisabledChannel()), new MemoryDedupeStore(), new MemoryRateLimiter(),
+                new InMemoryFailureStore());
+
+        Health health = indicator.health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(health.getDetails().get("reason")).isEqualTo("all NotifyChannel disabled");
+        assertThat(health.getDetails().get("disabledChannels")).asString().contains("disabled");
+    }
+
+    @Test
+    @DisplayName("部分渠道 disabled → DEGRADED 并列出")
+    void shouldReportDegradedWhenSomeChannelsDisabled() {
+        NotifyxHealthIndicator indicator = new NotifyxHealthIndicator(new NotifyxProperties(),
+                List.of(new UpChannel(), new DisabledChannel()), new MemoryDedupeStore(),
+                new MemoryRateLimiter(), new InMemoryFailureStore());
+
+        Health health = indicator.health();
+
+        assertThat(health.getStatus().getCode()).isEqualTo("DEGRADED");
+        assertThat(health.getDetails().get("disabledChannels")).asString().contains("disabled");
+    }
+
+    private static final class DisabledChannel implements NotifyChannel {
+
+        @Override
+        public String name() {
+            return "disabled";
+        }
+
+        @Override
+        public boolean isEnabled(NotifyContext ctx) {
+            return false;
+        }
+
+        @Override
+        public SendResult send(NotifyContext ctx) {
+            return SendResult.success("1", null, Duration.ZERO);
+        }
+    }
+
     private static final class DownChannel implements NotifyChannel {
 
         @Override
