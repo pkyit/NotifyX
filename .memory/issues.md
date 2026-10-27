@@ -413,3 +413,12 @@
 - **证据**：`NotifyPipelineTest.shouldRenderEnvAndTenant`；修复前 `${env}`/`${tenant}` 为空。
 - **关闭方式**：Pipeline 增加 `env`/`tenant` 字段与 Builder，`renderParams` 注入；
   自动装配传入 `properties.getEnv()/getTenant()`。
+
+## ISSUE-042 设计书要求的 `notifyx.queue.size` 指标不存在
+- **状态**：CLOSED（iter-48）
+- **现象**：`PriorityNotifyExecutor.queueSize()` 可读，但 `NotifyMetrics` 没有队列水位出口，
+  设计书 §15.1 的 `notifyx.queue.size` gauge 缺失。
+- **证据**：`MicrometerNotifyMetricsTest.shouldRecordQueueSize`、
+  `PriorityNotifyExecutorTest.shouldReportQueueSize`；修复前 registry 无该指标。
+- **关闭方式**：`NotifyMetrics.queueSize(int)` default 方法；Micrometer 注册 Gauge；
+  executor 在入队/丢弃/拒绝/关闭后上报。

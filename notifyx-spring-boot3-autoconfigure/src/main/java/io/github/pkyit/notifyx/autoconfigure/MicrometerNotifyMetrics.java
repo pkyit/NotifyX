@@ -2,6 +2,7 @@ package io.github.pkyit.notifyx.autoconfigure;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
 import io.github.pkyit.notifyx.core.model.Level;
@@ -9,6 +10,7 @@ import io.github.pkyit.notifyx.core.model.NotifyEvent;
 import io.github.pkyit.notifyx.core.model.SendResult;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
@@ -25,6 +27,7 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
 
     private final MeterRegistry registry;
     private final String prefix;
+    private final AtomicInteger queueSize = new AtomicInteger();
 
     /**
      * 使用默认前缀构造指标出口。
@@ -48,6 +51,7 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         this.prefix = normalized.isEmpty() ? "notifyx" : normalized;
+        Gauge.builder(metricName("queue.size"), queueSize, AtomicInteger::get).register(registry);
     }
 
     @Override
@@ -94,6 +98,11 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
                 .tag("scene", scene)
                 .register(registry)
                 .increment();
+    }
+
+    @Override
+    public void queueSize(int size) {
+        queueSize.set(Math.max(0, size));
     }
 
     private String metricName(String suffix) {

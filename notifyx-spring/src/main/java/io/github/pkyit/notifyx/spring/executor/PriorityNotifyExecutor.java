@@ -80,6 +80,7 @@ public final class PriorityNotifyExecutor implements NotifyTaskExecutor, Disposa
                 }
             } else {
                 metrics.queueDiscarded("queue-full", level);
+                metrics.queueSize(queue.size());
                 log.warn("notifyx queue full, discarding event level={} key={}", level, taskKey);
                 return;
             }
@@ -90,6 +91,7 @@ public final class PriorityNotifyExecutor implements NotifyTaskExecutor, Disposa
             metrics.queueDiscarded("executor-rejected", level);
             log.warn("notifyx executor rejected event key={}: {}", taskKey, ex.toString());
         }
+        metrics.queueSize(queue.size());
     }
 
     private Runnable lowestPriority() {
@@ -134,6 +136,8 @@ public final class PriorityNotifyExecutor implements NotifyTaskExecutor, Disposa
         } catch (InterruptedException ex) {
             pool.shutdownNow();
             Thread.currentThread().interrupt();
+        } finally {
+            metrics.queueSize(queue.size());
         }
     }
 
