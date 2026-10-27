@@ -101,3 +101,19 @@ mvn dependency:tree
 | `Missing sources/javadoc` | 空模块没有产物 | 本仓库给 starter 加了 `package-info.java` 兜底 |
 | Javadoc 语法错误导致构建失败 | `failOnError=true` | 本地先跑 `mvn -Prelease -Dgpg.skip=true package` |
 | 发布后才发现版本有 bug | — | 只能发新版本；这就是 `autoPublish=false` 的意义 |
+
+## 7. 已发布版本
+
+| 版本 | 日期 | 部署 ID | 签名密钥 |
+| --- | --- | --- | --- |
+| `1.0.0` | 2026-10-27 | `703e22fd-430d-4529-8ab7-55694769a463` | `3E4342CF17F69E0FFC44BD240B40F80108F892C5` |
+
+- 公钥：`docs/notifyx-release-key.asc`（同时上传 keyserver.ubuntu.com 与 keys.openpgp.org）。
+- 发布方式：`mvn -Prelease deploy` 上传 bundle，随后通过 Central Publisher API
+  `POST /api/v1/publisher/deployment/{id}` 触发 publish；POM 保持 `autoPublish=false`。
+- 发布状态：2026-10-27 09:38:42 **PUBLISHED**；17 个模块的 POM/jar/sources/javadoc/asc
+  在 `repo1.maven.org` 均可访问。
+- 发布产物：17 个模块的 jar/pom（jar 模块含 sources/javadoc）与 `.asc` 签名。
+- 验证：`mvn dependency:get -Dartifact=io.github.pkyit:notifyx-core:1.0.0`，
+  以及 Central 页面上的三个附件。
+- 注意：`1.0.0` 不可撤回；后续修复必须发布新 patch 版本。

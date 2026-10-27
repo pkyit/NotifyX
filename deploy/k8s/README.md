@@ -10,7 +10,7 @@ SMTP 凭据由 Secret 注入，配置由 ConfigMap 注入，从集群内触发�
 
 ```bash
 mvn -B -pl notifyx-sample -am package -DskipTests
-# 产物：notifyx-sample/target/notifyx-sample-1.0.0-SNAPSHOT.jar（约 26 MB，含依赖）
+# 产物：notifyx-sample/target/notifyx-sample-1.0.0.jar（约 26 MB，含依赖）
 ```
 
 ## 2. 创建命名空间、配置与凭据
@@ -36,7 +36,7 @@ kubectl -n notifyx-demo wait --for=condition=Ready pod/notifyx-sample --timeout=
 
 kubectl -n notifyx-demo exec notifyx-sample -- mkdir -p /app
 kubectl -n notifyx-demo cp \
-  notifyx-sample/target/notifyx-sample-1.0.0-SNAPSHOT.jar \
+  notifyx-sample/target/notifyx-sample-1.0.0.jar \
   notifyx-sample:/app/app.jar
 
 kubectl -n notifyx-demo exec notifyx-sample -- \

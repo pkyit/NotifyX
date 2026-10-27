@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.github.pkyit</groupId>
         <artifactId>notifyx-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
     <artifactId>notifyx-store-jdbc</artifactId>
     <name>NotifyX Store JDBC</name>

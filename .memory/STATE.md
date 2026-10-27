@@ -1,6 +1,6 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-27 09:00（提醒延迟收尾；master 已同步）
+> 更新时间：2026-10-27 09:35（iter-44：NotifyX 1.0.0 发布）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
@@ -22,7 +22,7 @@ iter-40 修复了 `@AlarmProtect` 数组参数导致的去重失效，并让审�
 attempts、全局 `retry.max-attempts` 真正封顶；iter-41 让 `notifyx.metrics.enabled` /
 `prefix` 真正生效；iter-42 让 Redis 去重 TTL 使用毫秒精度；iter-43 让
 `notifyx.retry.enabled=false` 真正只尝试一次。
-Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；P2+ 目标见 iter-31 审计，后续为 DLX/多实例/信创 DDL/Admin 等扩展。
 
 ## 2. 已实现（按设计书章节）
 
@@ -88,6 +88,7 @@ Maven Central 发布**不在要求内**；P2+ 目标见 iter-31 审计，后续�
 - [x] **指标配置生效** —— iter-41（`metrics.enabled` / `metrics.prefix` 真正生效）
 - [x] **Redis 去重 TTL 精度** —— iter-42（`SET NX PX`，亚秒窗口不再被放大）
 - [x] **retry.enabled 生效** —— iter-43（关闭后每个渠道只尝试一次）
+- [x] **NotifyX 1.0.0 发布** —— iter-44（17 模块、sources/javadoc/GPG、Central Portal）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -133,14 +134,13 @@ sms4j 适配。
    （DM/Kingbase/openGauss）与 `nx_idempotency` 保留期、Admin 控制台（P4）。
 3. **k8s 生产化**：自有镜像仓库 + Deployment + Secret 注入。
 4. **测试债**：T1–T24 剩余高危用例；core 覆盖率向 90% 提升。
-5. ~~Central 发布~~：用户明确不需要发布到 Maven 中央仓库，发布链路保留但不执行。
+5. **Central 发布**：1.0.0 已于 2026-10-27 发布（iter-44）；后续修复按 §19.3 发 patch 版本。
 
 ## 6. 当前分支
 
-`master`（iter-43 已合并；下一轮 iter-44 未开始）。工作区干净，
-`origin/master` 停在 `b0f44f4`；本次收尾文档提交 `f11b234` 尚未推送
-（DSH 沙箱 ssh 管道阻塞，需在普通终端 `git push origin master`）。
-工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
+`release/1.0.0`（基于 `master` `cf9bb1c`；iter-44 发布准备，待合并）。
+`master` 仍停在 `cf9bb1c`；发布完成后按 `--no-ff` 合并并推送。
+工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`、发布 `release/<version>`。
 
 ## 7. 夜间自动化收尾（2026-10-23 06:00）
 
@@ -174,3 +174,17 @@ sms4j 适配。
   无需再执行 `git push`。
 - 仍无 163 SMTP/IMAP 凭据，决策邮件未发出；下一步仍以 A02/A03/A04/A06/A07/A12/A14/A15 为主。
 - 下一工作时段从 19:00 重新开始；若提醒再次延迟，以“当前时间是否仍在 19:00–06:00”为准。
+
+## 10. 1.0.0 发布（2026-10-27）
+
+- 17 个模块版本 `1.0.0-SNAPSHOT` → `1.0.0`，README 与 k8s 示例坐标同步。
+- `mvn -B -ntp -Prelease -Dgpg.skip=true clean verify` 通过：17 模块，282 测试 + 13 live。
+- 发布密钥：`3E4342CF17F69E0FFC44BD240B40F80108F892C5`（`pkyit2 <pky1999@qq.com>`），
+  公钥已上传 keyserver.ubuntu.com / keys.openpgp.org，并收录为 `docs/notifyx-release-key.asc`。
+- Central bundle：`703e22fd-430d-4529-8ab7-55694769a463`（`notifyx-1.0.0`）；
+  POM 保持 `autoPublish=false`，校验通过后按 Publisher API 手动 publish，
+  2026-10-27 09:38:42 状态 **PUBLISHED**。
+- 发布后验证：17 个模块的 POM/jar/sources/javadoc/asc 在 repo1.maven.org 全部 HTTP 200。
+- 额度告警：组织 Pkyit 月度 Release Size 额度已用尽，2026-11-01 前不能再发新版本。
+- demo：`notifyx-demo` 已本地建仓并提交 `51d09df`；Gitee 远程
+  `pengkaiyan/notifyx-demo` 不存在，推送 404，待建空仓/令牌。

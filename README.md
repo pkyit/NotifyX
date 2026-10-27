@@ -25,12 +25,12 @@ NotifyX 把「发送」收口成一条固定责任链：**场景路由 → 免�
 <dependency>
     <groupId>io.github.pkyit</groupId>
     <artifactId>notifyx-spring-boot-starter</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.pkyit</groupId>
     <artifactId>notifyx-channel-log</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -320,7 +320,7 @@ public EventFilter debugOnlyFilter() {
 
 定义成 Spring Bean 即自动接入责任链，按 `order()` 升序执行；内置过滤器占用 100–600，`900+` 保留给业务方。
 
-## 当前版本范围（v1.0.0-SNAPSHOT）
+## 当前版本范围（v1.0.0）
 
 已实现（对应设计书 P0/P1 的 SDK 部分）：
 
@@ -481,12 +481,12 @@ notifyx:
 
 ```bash
 # Kafka（默认）
-java -jar notifyx-consumer/target/notifyx-consumer-1.0.0-SNAPSHOT.jar \
+java -jar notifyx-consumer/target/notifyx-consumer-1.0.0.jar \
   --spring.kafka.bootstrap-servers=127.0.0.1:9092 \
   --notifyx.consumer.topic=notifyx-events
 
 # RabbitMQ（需 producer 先声明 durable 队列）
-java -jar notifyx-consumer/target/notifyx-consumer-1.0.0-SNAPSHOT.jar \
+java -jar notifyx-consumer/target/notifyx-consumer-1.0.0.jar \
   --notifyx.consumer.transport=rabbitmq \
   --notifyx.consumer.rabbitmq.queue=notifyx-events \
   --spring.rabbitmq.host=127.0.0.1 --spring.rabbitmq.port=5672
