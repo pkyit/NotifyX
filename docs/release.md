@@ -113,6 +113,7 @@ mvn dependency:tree
   `POST /api/v1/publisher/deployment/{id}` 触发 publish；POM 保持 `autoPublish=false`。
 - 发布状态：2026-10-27 09:38:42 **PUBLISHED**；17 个模块的 POM/jar/sources/javadoc/asc
   在 `repo1.maven.org` 均可访问。
+- Git tag：annotated `v1.0.0`（指向 `08521e9`），已推送到 Gitee。
 - 发布产物：17 个模块的 jar/pom（jar 模块含 sources/javadoc）与 `.asc` 签名。
 - 验证：`mvn dependency:get -Dartifact=io.github.pkyit:notifyx-core:1.0.0`，
   以及 Central 页面上的三个附件。

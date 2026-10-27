@@ -186,6 +186,7 @@ sms4j 适配。
   2026-10-27 09:38:42 状态 **PUBLISHED**。
 - 发布后验证：17 个模块的 POM/jar/sources/javadoc/asc 在 repo1.maven.org 全部 HTTP 200。
 - `master` 合并提交 `9f3daa9` 已推送到 `origin/master`（Gitee）。
+- Git tag：annotated `v1.0.0`（指向 `08521e9`）已创建并推送。
 - 额度告警：组织 Pkyit 月度 Release Size 额度已用尽，2026-11-01 前不能再发新版本。
-- demo：`notifyx-demo` 已本地建仓并提交 `51d09df`；Gitee 远程
-  `pengkaiyan/notifyx-demo` 不存在，推送 404，待建空仓/令牌。
+- demo：`notifyx-demo` 已本地建仓并提交 `51d09df`，已推送到
+  `git@gitee.com:pengkaiyan/notifyx-demo.git` 的 `master`。
