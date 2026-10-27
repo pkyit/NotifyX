@@ -144,3 +144,14 @@ mvn -Prelease -Dgpg.skip=true package → 两个 starter 均产出 jar/sources/j
 | 解决 | 运行前设置 `$env:JDK_JAVA_OPTIONS='-Djdk.attach.allowAttachSelf=true'`，让 fork 内部自附加 |
 | 验证 | 加该变量后 store-redis 27 用例通过（7 live 跳过）；全量 verify 结果见 iter-32 |
 | Git | 本沙箱里 `git pull` / `git push` 可能因 `ssh.exe` 无法创建 signal pipe 失败；提交先在本地完成，推送需在普通终端执行 |
+
+## 13. Release profile 的 Javadoc 沙箱限制（2026-10-28 实测）
+
+| 项 | 事实 |
+| --- | --- |
+| 命令 | `mvn -B -ntp -Prelease "-Dgpg.skip=true" clean package` |
+| 现象 | `notifyx-core` 的 `maven-javadoc-plugin:3.10.1:jar` 失败：`error: Destination directory not writable: ...\notifyx-core\target\reports\apidocs` |
+| 复现 | `-pl notifyx-core -am` 重试仍失败；普通 `mvn clean verify` 通过，PowerShell 手工在该目录创建子目录也成功 |
+| 判断 | DSH 沙箱对 `javadoc.exe` 子进程的写入限制，不是 POM/代码问题；iter-44 在非此沙箱环境已成功产出 sources/javadoc 并发布 1.0.0 |
+| 处理 | 1.0.1 发布前在普通终端重跑 release build；本环境只验证 `clean verify`，不改 javadoc 插件配置来“绕过” |
+| 备查 | 如临时只验证 jar/sources，可加 `"-Dmaven.javadoc.skip=true"`，但不能替代正式 release 校验 |

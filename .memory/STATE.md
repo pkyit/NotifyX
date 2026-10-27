@@ -238,3 +238,6 @@ sms4j 适配。
   Spring 环境下前者不可达。需要用户决定“废弃前者”还是“明确优先级并停止 scene 默认填充”。
 - 邮件凭据仍缺 `NOTIFYX_SMTP_PASSWORD`（HOST/PORT/SSL/USER/FROM 已注入），
   无法发信/收信；A07 的审计/发送/落盘三条脱敏链路已补齐，默认开关保持 1.0.0 行为。
+- 04:00 release profile 审计：`mvn -Prelease -Dgpg.skip=true clean package` 在
+  `notifyx-core` 的 javadoc 阶段失败（`Destination directory not writable`），
+  属 DSH 沙箱子进程写入限制，见 `env.md` §13；1.0.1 发布前需在普通终端重跑 release build。
