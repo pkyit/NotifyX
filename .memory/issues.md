@@ -441,3 +441,12 @@
   修复前 metrics 无 `shutdown` 原因。
 - **关闭方式**：遍历 `shutdownNow()` 返回的任务，逐个 `queueDiscarded("shutdown", level)`，
   前 20 条打印 level/taskKey，再汇总数量。
+
+## ISSUE-045 全部渠道被禁用时健康状态仍可能是 UP/DEGRADED
+- **状态**：CLOSED（iter-51）
+- **现象**：`NotifyxHealthIndicator` 只判断 `channels.isEmpty()`；渠道已注册但全部
+  `isEnabled=false` 时，健康状态仍可能显示 UP/DEGRADED，实际没有通知可投递。
+- **证据**：`NotifyxHealthIndicatorTest.shouldReportDownWhenAllChannelsDisabled` /
+  `shouldReportDegradedWhenSomeChannelsDisabled`；修复前全部禁用不是 DOWN。
+- **关闭方式**：检查所有渠道的 `isEnabled(null)`；全部禁用 → DOWN，
+  部分禁用 → DEGRADED，并在 details 中列出 `disabledChannels`。

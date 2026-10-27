@@ -66,6 +66,18 @@ public final class NotifyxHealthIndicator implements HealthIndicator {
         if (channels.isEmpty()) {
             return Health.down().withDetail("reason", "no NotifyChannel registered").build();
         }
+        List<String> disabledChannels = new ArrayList<>();
+        for (NotifyChannel channel : channels) {
+            if (!isEnabled(channel)) {
+                disabledChannels.add(channel.name());
+            }
+        }
+        if (disabledChannels.size() == channels.size()) {
+            return down()
+                    .withDetail("reason", "all NotifyChannel disabled")
+                    .withDetail("disabledChannels", disabledChannels)
+                    .build();
+        }
 
         List<String> downChannels = new ArrayList<>();
         if (probeEnabled) {
@@ -82,7 +94,8 @@ public final class NotifyxHealthIndicator implements HealthIndicator {
             }
         }
 
-        boolean degraded = !downChannels.isEmpty() || isMemory(dedupeStore) || isMemory(rateLimiter);
+        boolean degraded = !downChannels.isEmpty() || !disabledChannels.isEmpty()
+                || isMemory(dedupeStore) || isMemory(rateLimiter);
         Health.Builder builder = degraded ? Health.status("DEGRADED") : Health.up();
         builder.withDetail("mode", properties.getMode())
                 .withDetail("channels", channelNames())
@@ -92,6 +105,9 @@ public final class NotifyxHealthIndicator implements HealthIndicator {
                 .withDetail("probeEnabled", probeEnabled);
         if (!downChannels.isEmpty()) {
             builder.withDetail("downChannels", downChannels);
+        }
+        if (!disabledChannels.isEmpty()) {
+            builder.withDetail("disabledChannels", disabledChannels);
         }
         if (isMemory(dedupeStore) || isMemory(rateLimiter)) {
             builder.withDetail("degradedReason", "in-memory dedupe/rate limiter: multi-instance may duplicate");
@@ -121,6 +137,14 @@ public final class NotifyxHealthIndicator implements HealthIndicator {
         }
         String name = spi.getClass().getSimpleName().toLowerCase(Locale.ROOT);
         return name.contains("memory") || name.contains("inmemory");
+    }
+
+    private static boolean isEnabled(NotifyChannel channel) {
+        try {
+            return channel.isEnabled(null);
+        } catch (RuntimeException ex) {
+            return true;
+        }
     }
 
     private static String simpleName(Object value) {
