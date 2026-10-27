@@ -432,3 +432,12 @@
 - **关闭方式**：`NotifyMetrics.circuitState(channel, state)` default 方法；
   Micrometer 按 channel 注册 Gauge（CLOSED=0/HALF_OPEN=1/OPEN=2）；
   Pipeline 在 breaker 构造、allowRequest 后、发送循环结束后上报。
+
+## ISSUE-044 关闭超时丢弃任务只记录数量，任务标识与指标丢失
+- **状态**：CLOSED（iter-50）
+- **现象**：`PriorityNotifyExecutor.destroy()` 超时后只打印
+  `N tasks dropped from queue`；具体 level/taskKey 丢失，`queue.discarded` 不增加。
+- **证据**：`PriorityNotifyExecutorTest.shouldReportShutdownDroppedTasks`；
+  修复前 metrics 无 `shutdown` 原因。
+- **关闭方式**：遍历 `shutdownNow()` 返回的任务，逐个 `queueDiscarded("shutdown", level)`，
+  前 20 条打印 level/taskKey，再汇总数量。

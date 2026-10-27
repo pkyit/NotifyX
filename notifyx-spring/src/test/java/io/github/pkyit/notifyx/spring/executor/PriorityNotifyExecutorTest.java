@@ -133,6 +133,26 @@ class PriorityNotifyExecutorTest {
         assertThat(metrics.queueSizes).isNotEmpty();
     }
 
+    @Test
+    @DisplayName("关闭超时丢弃的任务逐个上报 shutdown 指标")
+    void shouldReportShutdownDroppedTasks() throws Exception {
+        PriorityNotifyExecutor shortLived = new PriorityNotifyExecutor(1, 1, 4, Duration.ofSeconds(5),
+                "test-shutdown-", metrics, Duration.ofMillis(1));
+        CountDownLatch blockerStarted = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        shortLived.execute(Level.INFO, "blocker", () -> {
+            blockerStarted.countDown();
+            await(release);
+        });
+        assertThat(blockerStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        shortLived.execute(Level.INFO, "queued", () -> executed.add("queued"));
+
+        shortLived.destroy();
+        release.countDown();
+
+        assertThat(metrics.discardedReasons).contains("shutdown");
+    }
+
     private PriorityNotifyExecutor newExecutor(int corePoolSize, int capacity) {
         return new PriorityNotifyExecutor(corePoolSize, corePoolSize, capacity, Duration.ofSeconds(5),
                 "test-executor-", metrics, Duration.ofSeconds(2));
