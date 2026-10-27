@@ -19,6 +19,7 @@ import io.github.pkyit.notifyx.core.spi.FailedRecord;
 import io.github.pkyit.notifyx.core.spi.FailureStore;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.NotifyContext;
+import io.github.pkyit.notifyx.core.support.DefaultMasker;
 import io.github.pkyit.notifyx.core.support.NotifyEnvelopeCodec;
 import io.github.pkyit.notifyx.core.support.SimpleTemplateEngine;
 
@@ -67,7 +68,28 @@ class FailurePersistenceTest {
         assertThat(envelope.attempts()).isEqualTo(3);
     }
 
+    @Test
+    @DisplayName("mask.before-persist=true 时 envelope params 脱敏，原事件不变")
+    void shouldMaskEnvelopeParamsBeforePersist() {
+        NotifyEvent event = NotifyEvent.builder("SCENE_A")
+                .level(Level.ERROR)
+                .bizId("B1")
+                .param("phone", "13812345678")
+                .build();
+
+        pipeline(1, true).handle(event);
+
+        FailedRecord record = store.records.get(0);
+        NotifyEnvelope envelope = NotifyEnvelopeCodec.fromJson(record.envelopeJson());
+        assertThat(envelope.params().get("phone")).isEqualTo("138****5678");
+        assertThat(event.params().get("phone")).isEqualTo("13812345678");
+    }
+
     private NotifyPipeline pipeline(int maxAttempts) {
+        return pipeline(maxAttempts, false);
+    }
+
+    private NotifyPipeline pipeline(int maxAttempts, boolean maskBeforePersist) {
         return NotifyPipeline.builder()
                 .sceneRegistry(SceneRegistry.of(Map.of("SCENE_A",
                         SceneConfig.builder("SCENE_A").channels(List.of("failing")).build()),
@@ -76,6 +98,8 @@ class FailurePersistenceTest {
                 .templateEngine(new SimpleTemplateEngine())
                 .templates(Map.of("default", new MessageTemplate("default", "t", "${content}")))
                 .failureStore(store)
+                .masker(new DefaultMasker())
+                .maskBeforePersist(maskBeforePersist)
                 .retryPolicy(new RetryPolicy(maxAttempts, Duration.ofMillis(1), Duration.ofMillis(5), 0.0))
                 .build();
     }

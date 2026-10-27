@@ -71,6 +71,7 @@ public final class NotifyPipeline {
     private final boolean maskBeforeAudit;
     private final boolean maskEnabled;
     private final boolean maskBeforeSend;
+    private final boolean maskBeforePersist;
     private final DeferredHandler deferredHandler;
     private final Map<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final CircuitConfig circuitConfig;
@@ -105,6 +106,7 @@ public final class NotifyPipeline {
         this.maskBeforeAudit = builder.maskBeforeAudit;
         this.maskEnabled = builder.maskEnabled;
         this.maskBeforeSend = builder.maskBeforeSend;
+        this.maskBeforePersist = builder.maskBeforePersist;
         this.deferredHandler = builder.deferredHandler;
         this.circuitConfig = builder.circuitConfig;
         this.traceContext = builder.traceContext == null ? TraceContext.none() : builder.traceContext;
@@ -411,8 +413,12 @@ public final class NotifyPipeline {
             long now = System.currentTimeMillis();
             String envelopeJson;
             try {
-                envelopeJson = NotifyEnvelopeCodec.toJson(NotifyEnvelope.of(event, dedupeKey,
-                        resolveTraceId(event), resolveSpanId(event), instanceId, attempts, now));
+                NotifyEnvelope envelope = NotifyEnvelope.of(event, dedupeKey,
+                        resolveTraceId(event), resolveSpanId(event), instanceId, attempts, now);
+                if (maskEnabled && maskBeforePersist && masker != null) {
+                    envelope = envelope.withParams(masker.maskParams(envelope.params()));
+                }
+                envelopeJson = NotifyEnvelopeCodec.toJson(envelope);
             } catch (RuntimeException codecFailure) {
                 // 报文序列化失败不能让落盘整体失败：退化为 eventId，至少留下线索
                 log.debug("envelope serialization failed: {}", codecFailure.toString());
@@ -677,6 +683,7 @@ public final class NotifyPipeline {
         private boolean maskBeforeAudit = true;
         private boolean maskEnabled = true;
         private boolean maskBeforeSend;
+        private boolean maskBeforePersist;
         private DeferredHandler deferredHandler;
         private CircuitConfig circuitConfig = CircuitConfig.defaults();
         private TraceContext traceContext = TraceContext.none();
@@ -792,6 +799,17 @@ public final class NotifyPipeline {
          */
         public Builder maskBeforeSend(boolean maskBeforeSend) {
             this.maskBeforeSend = maskBeforeSend;
+            return this;
+        }
+
+        /**
+         * 是否在失败落盘前脱敏 envelope params。
+         *
+         * @param maskBeforePersist 是否开启
+         * @return 构建器
+         */
+        public Builder maskBeforePersist(boolean maskBeforePersist) {
+            this.maskBeforePersist = maskBeforePersist;
             return this;
         }
 

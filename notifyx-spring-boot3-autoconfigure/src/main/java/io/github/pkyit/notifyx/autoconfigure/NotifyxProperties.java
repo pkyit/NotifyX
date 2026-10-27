@@ -934,6 +934,7 @@ public class NotifyxProperties {
         private boolean enabled = true;
         private boolean beforeAudit = true;
         private boolean beforeSend;
+        private boolean beforePersist;
 
         public boolean isEnabled() {
             return enabled;
@@ -957,6 +958,15 @@ public class NotifyxProperties {
 
         public void setBeforeSend(boolean beforeSend) {
             this.beforeSend = beforeSend;
+        }
+
+        /** 失败落盘前是否脱敏 envelope params（默认 false，保持补偿报文可重放）。 */
+        public boolean isBeforePersist() {
+            return beforePersist;
+        }
+
+        public void setBeforePersist(boolean beforePersist) {
+            this.beforePersist = beforePersist;
         }
     }
 

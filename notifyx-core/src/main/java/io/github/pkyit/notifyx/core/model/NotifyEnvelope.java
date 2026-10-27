@@ -93,6 +93,18 @@ public record NotifyEnvelope(
     }
 
     /**
+     * 返回替换 params 后的新报文（用于落盘前脱敏）。
+     *
+     * @param maskedParams 新参数
+     * @return 新报文
+     */
+    public NotifyEnvelope withParams(Map<String, Object> maskedParams) {
+        return new NotifyEnvelope(schemaVersion, eventId, idempotencyKey, dedupeKey, scene, level, title,
+                maskedParams, receivers, bizId, tags, traceId, spanId, instanceId, silentWindowSeconds,
+                attempts, occurredAt, createdAt);
+    }
+
+    /**
      * 从事件与运行时上下文组装报文。
      *
      * @param event 事件
