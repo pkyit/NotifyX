@@ -405,3 +405,11 @@
   `MaskEnabledTest.shouldMaskBizId` / `shouldMaskFailureReason`；修复前 bizId/errorMsg 为原文。
 - **关闭方式**：`maskText` 扩展手机号/邮箱/身份证三类正则；Pipeline 在开启脱敏时
   对 bizId 与 errorMsg 调用 `maskText`。
+
+## ISSUE-041 `notifyx.env` / `notifyx.tenant` 未进入模板参数
+- **状态**：CLOSED（iter-47）
+- **现象**：`NotifyxProperties.env/tenant` 有值，但 Pipeline 渲染参数没有注入；
+  设计书模板示例 `[${env}] ${scene}` 渲染为空串。
+- **证据**：`NotifyPipelineTest.shouldRenderEnvAndTenant`；修复前 `${env}`/`${tenant}` 为空。
+- **关闭方式**：Pipeline 增加 `env`/`tenant` 字段与 Builder，`renderParams` 注入；
+  自动装配传入 `properties.getEnv()/getTenant()`。

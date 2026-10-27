@@ -361,6 +361,8 @@ public class NotifyxAutoConfiguration {
                         properties.getRetry().getBaseDelay(), properties.getRetry().getMaxDelay(),
                         properties.getRetry().getJitter()))
                 .instanceId(resolveInstanceId(properties, environment))
+                .env(properties.getEnv())
+                .tenant(properties.getTenant())
                 .maskBeforeAudit(properties.getMask().isBeforeAudit())
                 .maskEnabled(properties.getMask().isEnabled())
                 .circuitConfig(new NotifyPipeline.CircuitConfig(
