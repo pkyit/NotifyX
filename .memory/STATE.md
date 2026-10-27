@@ -1,6 +1,6 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-24 01:05（iter-43：retry.enabled 生效修复）
+> 更新时间：2026-10-27 09:00（提醒延迟收尾；master 已同步）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
@@ -137,8 +137,8 @@ sms4j 适配。
 
 ## 6. 当前分支
 
-`master`（iter-43 已合并；下一轮 iter-44 未开始）。本地领先 `origin/master` 26 个提交，
-因 DSH 沙箱禁止 ssh 管道，`git push` 未成功；需在普通终端执行 `git push origin master`。
+`master`（iter-43 已合并；下一轮 iter-44 未开始）。工作区干净，
+本地 `master` 与 `origin/master` 已同步于 `b0f44f4`；后续如需推送，见 §9。
 工作分支命名：功能 `feature/*`、缺陷 `bugfix/*`。
 
 ## 7. 夜间自动化收尾（2026-10-23 06:00）
@@ -163,4 +163,13 @@ sms4j 适配。
 - iter-42 让 Redis 去重 TTL 使用毫秒精度，亚秒窗口不再被放大到 1 秒。
 - iter-43 让 `notifyx.retry.enabled=false` 真正只尝试一次。
 - 全量 `mvn -B -ntp clean verify` 通过：295 用例（282 执行 + 13 live 跳过）。
-- 待 06:00 收尾提醒；剩余 A02/A03/A04/A06/A07/A12/A14/A15。push 与邮件仍阻塞。
+- 待 06:00 收尾提醒；剩余 A02/A03/A04/A06/A07/A12/A14/A15。邮件仍阻塞；push 已在后续会话完成。
+
+## 9. 提醒延迟与同步状态（2026-10-27 09:00）
+
+- 10-26 19:00 启动、10-26 21:00 巡检、10-27 06:00 收尾三条提醒在 10-27 08:59 一次性补发，
+  已全部晚于工作时段；按最新 06:00 收尾语义，**不新开代码改动**。
+- 工作区干净；`master` 与 `origin/master` 同为 `b0f44f4`，此前 26 个提交已同步，
+  无需再执行 `git push`。
+- 仍无 163 SMTP/IMAP 凭据，决策邮件未发出；下一步仍以 A02/A03/A04/A06/A07/A12/A14/A15 为主。
+- 下一工作时段从 19:00 重新开始；若提醒再次延迟，以“当前时间是否仍在 19:00–06:00”为准。
