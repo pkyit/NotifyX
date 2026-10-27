@@ -1,7 +1,9 @@
 package io.github.pkyit.notifyx.autoconfigure;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
@@ -28,6 +30,7 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
     private final MeterRegistry registry;
     private final String prefix;
     private final AtomicInteger queueSize = new AtomicInteger();
+    private final Map<String, AtomicInteger> circuitStates = new ConcurrentHashMap<>();
 
     /**
      * 使用默认前缀构造指标出口。
@@ -103,6 +106,31 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
     @Override
     public void queueSize(int size) {
         queueSize.set(Math.max(0, size));
+    }
+
+    @Override
+    public void circuitState(String channel, String state) {
+        if (channel == null) {
+            return;
+        }
+        AtomicInteger value = circuitStates.computeIfAbsent(channel, name -> {
+            AtomicInteger gauge = new AtomicInteger();
+            Gauge.builder(metricName("circuit.state"), gauge, AtomicInteger::get)
+                    .tag("channel", name)
+                    .register(registry);
+            return gauge;
+        });
+        value.set(circuitCode(state));
+    }
+
+    private static int circuitCode(String state) {
+        if ("OPEN".equals(state)) {
+            return 2;
+        }
+        if ("HALF_OPEN".equals(state)) {
+            return 1;
+        }
+        return 0;
     }
 
     private String metricName(String suffix) {

@@ -422,3 +422,13 @@
   `PriorityNotifyExecutorTest.shouldReportQueueSize`；修复前 registry 无该指标。
 - **关闭方式**：`NotifyMetrics.queueSize(int)` default 方法；Micrometer 注册 Gauge；
   executor 在入队/丢弃/拒绝/关闭后上报。
+
+## ISSUE-043 缺少渠道熔断状态指标
+- **状态**：CLOSED（iter-49）
+- **现象**：`CircuitBreaker.state()` 可读，但 `NotifyMetrics` 没有熔断状态出口；
+  运维只能从 `CIRCUIT_OPEN` 审计间接推断，无法在 Prometheus 看趋势。
+- **证据**：`MicrometerNotifyMetricsTest.shouldRecordCircuitState`；修复前 registry 无
+  `notifyx.circuit.state`。
+- **关闭方式**：`NotifyMetrics.circuitState(channel, state)` default 方法；
+  Micrometer 按 channel 注册 Gauge（CLOSED=0/HALF_OPEN=1/OPEN=2）；
+  Pipeline 在 breaker 构造、allowRequest 后、发送循环结束后上报。

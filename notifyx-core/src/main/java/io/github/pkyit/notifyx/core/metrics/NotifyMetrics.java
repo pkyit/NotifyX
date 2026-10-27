@@ -64,6 +64,15 @@ public interface NotifyMetrics {
     }
 
     /**
+     * 渠道熔断状态。
+     *
+     * @param channel 渠道
+     * @param state 状态名：CLOSED / HALF_OPEN / OPEN
+     */
+    default void circuitState(String channel, String state) {
+    }
+
+    /**
      * no-op 实现。
      *
      * @return 指标出口
