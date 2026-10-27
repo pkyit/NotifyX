@@ -10,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import io.github.pkyit.notifyx.core.exception.ChannelTimeoutException;
 import io.github.pkyit.notifyx.core.model.Level;
 import io.github.pkyit.notifyx.core.model.NotifyEvent;
 import io.github.pkyit.notifyx.core.model.SendResult;
@@ -61,6 +62,30 @@ class MaskEnabledTest {
         assertThat(audit.records.get(0).receiver()).isEqualTo("a***@example.com");
     }
 
+    @Test
+    @DisplayName("mask.enabled=true 时审计 bizId 中的手机号脱敏")
+    void shouldMaskBizId() {
+        pipeline(true).handle(NotifyEvent.builder("SCENE_A")
+                .level(Level.ERROR)
+                .bizId("13812345678")
+                .build());
+
+        assertThat(audit.records).hasSize(1);
+        assertThat(audit.records.get(0).bizId()).isEqualTo("138****5678");
+    }
+
+    @Test
+    @DisplayName("mask.enabled=true 时审计 failureReason 中的邮箱脱敏")
+    void shouldMaskFailureReason() {
+        channel.fail = true;
+
+        pipeline(true).handle(event());
+
+        assertThat(audit.records).hasSize(1);
+        assertThat(audit.records.get(0).errorMsg()).contains("a***@example.com");
+        assertThat(audit.records.get(0).errorMsg()).doesNotContain("alice@example.com");
+    }
+
     private NotifyPipeline pipeline(boolean maskEnabled) {
         SceneConfig scene = SceneConfig.builder("SCENE_A").channels(List.of("recording")).build();
         return NotifyPipeline.builder()
@@ -72,6 +97,7 @@ class MaskEnabledTest {
                 .masker(new DefaultMasker())
                 .maskBeforeAudit(true)
                 .maskEnabled(maskEnabled)
+                .retryPolicy(new RetryPolicy(1, Duration.ofMillis(1), Duration.ofMillis(1), 0.0))
                 .build();
     }
 
@@ -84,6 +110,8 @@ class MaskEnabledTest {
 
     private static final class RecordingChannel implements NotifyChannel {
 
+        private volatile boolean fail;
+
         @Override
         public String name() {
             return "recording";
@@ -91,6 +119,9 @@ class MaskEnabledTest {
 
         @Override
         public SendResult send(NotifyContext ctx) {
+            if (fail) {
+                throw new ChannelTimeoutException("recording", new IllegalStateException("failed for alice@example.com"));
+            }
             return SendResult.success("1", null, Duration.ZERO);
         }
     }

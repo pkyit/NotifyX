@@ -27,6 +27,9 @@ public final class DefaultMasker implements Masker {
     private static final Set<String> ID_CARD_KEYS = Set.of("idcard", "idno", "certno");
     private static final Set<String> BANK_CARD_KEYS = Set.of("bankcard", "cardno", "account");
     private static final Pattern ID_CARD_PATTERN = Pattern.compile("(?<!\\d)(\\d{6})\\d{8}(\\d{3}[0-9Xx])(?!\\d)");
+    private static final Pattern PHONE_PATTERN = Pattern.compile("(?<!\\d)(1[3-9]\\d{9})(?!\\d)");
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
 
     @Override
     public String maskPhone(String value) {
@@ -69,7 +72,9 @@ public final class DefaultMasker implements Masker {
         if (text == null || text.isEmpty()) {
             return text;
         }
-        return ID_CARD_PATTERN.matcher(text).replaceAll("$1***********$2");
+        String masked = ID_CARD_PATTERN.matcher(text).replaceAll("$1***********$2");
+        masked = PHONE_PATTERN.matcher(masked).replaceAll(match -> maskPhone(match.group(1)));
+        return EMAIL_PATTERN.matcher(masked).replaceAll(match -> maskEmail(match.group()));
     }
 
     @Override

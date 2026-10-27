@@ -101,6 +101,17 @@ class DefaultMaskerTest {
     }
 
     @Test
+    @DisplayName("maskText 兜底脱敏文本中的手机号与邮箱")
+    void shouldMaskTextPhoneAndEmail() {
+        String text = "用户手机 13812345678，邮箱 alice@example.com";
+
+        String masked = masker.maskText(text);
+
+        assertThat(masked).contains("138****5678").contains("a***@example.com");
+        assertThat(masked).doesNotContain("13812345678", "alice@example.com");
+    }
+
+    @Test
     @DisplayName("maskText 兜底脱敏文本中的身份证号")
     void shouldMaskTextIdCards() {
         String text = "用户身份证 110101199001011234 校验失败";
