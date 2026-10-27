@@ -270,6 +270,7 @@ public final class NotifyPipeline {
         }
 
         CircuitBreaker breaker = breakerFor(channel.name());
+        recordCircuitState(channel, breaker);
         long started = System.nanoTime();
         SendResult result = null;
         int attemptsUsed = 0;
@@ -278,6 +279,7 @@ public final class NotifyPipeline {
                 result = SendResult.suppressed(SendResult.Status.CIRCUIT_OPEN, "channel circuit open");
                 break;
             }
+            recordCircuitState(channel, breaker);
             attemptsUsed = attempt;
             NotifyContext context = baseContext.withAttempt(attempt);
             try {
@@ -342,6 +344,7 @@ public final class NotifyPipeline {
                 }
             }
         }
+        recordCircuitState(channel, breaker);
         if (result == null) {
             // 防御性兜底：任何情况下都不能把「渠道没有结果」当成成功
             result = SendResult.retryable("channel produced no result", elapsed(started));
@@ -501,6 +504,10 @@ public final class NotifyPipeline {
     private CircuitBreaker breakerFor(String channel) {
         return breakers.computeIfAbsent(channel, name -> new CircuitBreaker(
                 circuitConfig.failureThreshold(), circuitConfig.openDuration(), circuitConfig.maxOpenDuration()));
+    }
+
+    private void recordCircuitState(NotifyChannel channel, CircuitBreaker breaker) {
+        metrics.circuitState(channel.name(), breaker.state().name());
     }
 
     private MessageTemplate templateFor(SceneConfig scene) {

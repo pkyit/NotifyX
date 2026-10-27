@@ -114,6 +114,22 @@ class MicrometerNotifyMetricsTest {
     }
 
     @Test
+    @DisplayName("熔断状态 gauge：OPEN=2 / HALF_OPEN=1 / CLOSED=0")
+    void shouldRecordCircuitState() {
+        metrics.circuitState("email", "OPEN");
+        assertThat(registry.get("notifyx.circuit.state").tag("channel", "email").gauge().value())
+                .isEqualTo(2.0);
+
+        metrics.circuitState("email", "HALF_OPEN");
+        assertThat(registry.get("notifyx.circuit.state").tag("channel", "email").gauge().value())
+                .isEqualTo(1.0);
+
+        metrics.circuitState("email", "CLOSED");
+        assertThat(registry.get("notifyx.circuit.state").tag("channel", "email").gauge().value())
+                .isZero();
+    }
+
+    @Test
     @DisplayName("指标名统一 notifyx. 前缀且不使用 receiver/bizId 等高基数标签")
     void shouldKeepLowCardinality() {
         NotifyEvent event = NotifyEvent.builder("S1").bizId("BIZ-1").build();
