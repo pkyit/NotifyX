@@ -358,12 +358,14 @@ public EventFilter debugOnlyFilter() {
 │   去重   MemoryDedupeStore  ⚠ 单机内存，多实例部署下能力受限
 ```
 
-- `notifyx.diagnostics.banner=false` 关闭诊断表。
+- `notifyx.diagnostics.banner=false` 关闭诊断表；
+  `notifyx.diagnostics.fail-fast=true` 时，无渠道或全部渠道禁用会在启动阶段直接失败
+  （默认 false，保持“缺配置不阻塞启动”的承诺）。
 - `notifyx.metrics.enabled=false` 关闭 Micrometer 指标；`notifyx.metrics.prefix` 修改指标名前缀
   （默认 `notifyx`，末尾点会自动去掉）。
 - 引入 `spring-boot-starter-actuator` 后自动出现 `notifyx` 健康组件：
   `UP` / `DEGRADED`（内存去重/限流或多渠道部分不可用，K8s readiness 仍为 UP）/
-  `DOWN`（全局静默或无渠道）/ `OUT_OF_SERVICE`（`notifyx.enabled=false`）。
+  `DOWN`（全局静默、无渠道或全部渠道禁用）/ `OUT_OF_SERVICE`（`notifyx.enabled=false`）。
 - **默认不做真实探活**（`probe-enabled=false`），避免 K8s 每 10 秒的健康检查变成 8640 条垃圾消息；
   需要真实探活时显式开启 `notifyx.actuator.health.probe-enabled=true`。
 - 关闭时 `NotifyxLifecycle` 在 `notifyx.async.shutdown-await`（默认 10s）内排空队列，再关闭渠道；
