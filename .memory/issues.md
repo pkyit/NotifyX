@@ -476,3 +476,13 @@
   `shouldNotFailFastByDefault`；修复前 `fail-fast=true` 不抛异常。
 - **关闭方式**：`NotifyxDiagnostics` 实现 `InitializingBean`；`fail-fast=true` 时
   无渠道/全部渠道禁用抛 `IllegalStateException`；默认 false 行为不变。
+
+## ISSUE-049 `dedupe.store` / `rate-limit.store` 被 Redis 自动装配忽略
+- **状态**：CLOSED（iter-55）
+- **现象**：`RedisStoresAutoConfiguration` 只看 `StringRedisTemplate`，不读
+  `notifyx.dedupe.store` / `notifyx.rate-limit.store`；配 `memory` 仍装配 Redis 实现。
+- **证据**：`RedisStoresAutoConfigurationTest.shouldRespectMemoryStoreSelection` /
+  `shouldRespectRedisStoreSelection`；修复前 `memory` 下仍有 Fallback 实现。
+- **关闭方式**：Redis 去重/限流 Bean 增加 `@ConditionalOnExpression`，只在
+  `dedupe.store`/`rate-limit.store` 为 `auto` 或 `redis` 时生效。
+- **遗留**：`jdbc` 去重仍未实现，会落到内存；需单独立项（信创 DDL 待决策）。

@@ -4,6 +4,7 @@ package io.github.pkyit.notifyx.store.redis;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
@@ -47,6 +48,7 @@ public class RedisStoresAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(DedupeStore.class)
+    @ConditionalOnExpression("'${notifyx.dedupe.store:auto}' == 'auto' or '${notifyx.dedupe.store:auto}' == 'redis'")
     public DedupeStore redisDedupeStore(StringRedisTemplate template, RedisStoreProperties properties) {
         return new FallbackDedupeStore(new RedisDedupeStore(template, properties.getKeyPrefix()),
                 new MemoryDedupeStore(), properties.getFailureThreshold(), properties.getOpenDuration());
@@ -61,6 +63,7 @@ public class RedisStoresAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(RateLimiter.class)
+    @ConditionalOnExpression("'${notifyx.rate-limit.store:auto}' == 'auto' or '${notifyx.rate-limit.store:auto}' == 'redis'")
     public RateLimiter redisRateLimiter(StringRedisTemplate template, RedisStoreProperties properties) {
         return new FallbackRateLimiter(new RedisRateLimiter(template, properties.getKeyPrefix()),
                 new MemoryRateLimiter(), properties.getFailureThreshold(), properties.getOpenDuration());

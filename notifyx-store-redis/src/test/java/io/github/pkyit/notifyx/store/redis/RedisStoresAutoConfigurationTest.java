@@ -55,6 +55,28 @@ class RedisStoresAutoConfigurationTest {
     }
 
     @Test
+    @DisplayName("dedupe.store=memory / rate-limit.store=memory 时跳过 Redis 实现")
+    void shouldRespectMemoryStoreSelection() {
+        runner.withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+                .withPropertyValues("notifyx.dedupe.store=memory", "notifyx.rate-limit.store=memory")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(DedupeStore.class);
+                    assertThat(context).doesNotHaveBean(RateLimiter.class);
+                });
+    }
+
+    @Test
+    @DisplayName("显式 dedupe.store=redis / rate-limit.store=redis 时仍装配")
+    void shouldRespectRedisStoreSelection() {
+        runner.withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+                .withPropertyValues("notifyx.dedupe.store=redis", "notifyx.rate-limit.store=redis")
+                .run(context -> {
+                    assertThat(context.getBean(DedupeStore.class)).isInstanceOf(FallbackDedupeStore.class);
+                    assertThat(context.getBean(RateLimiter.class)).isInstanceOf(FallbackRateLimiter.class);
+                });
+    }
+
+    @Test
     @DisplayName("配置前缀与阈值可绑定")
     void shouldBindProperties() {
         runner.withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
