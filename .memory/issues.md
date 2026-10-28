@@ -495,3 +495,12 @@
   `shouldWarnRedisStoreMismatch` / `shouldWarnTemplateEngineMismatch`。
 - **关闭方式**：`NotifyxDiagnostics` 新增 `appendConfigMismatchWarnings`，在启动诊断表
   输出配置/实际不一致的 WARN 行；不改变装配行为。
+
+## ISSUE-051 Redis 降级状态未进入健康检查/诊断表
+- **状态**：CLOSED（iter-57）
+- **现象**：`FallbackDedupeStore` / `FallbackRateLimiter` 有 `isDegraded()`，但健康检查
+  与诊断表只看实现类名；Redis 降级后仍显示 UP 或 `T1+（外部存储）`。
+- **证据**：`NotifyxHealthIndicatorTest.shouldReportDegradedWhenStoreFallsBack`、
+  `NotifyxDiagnosticsTest.shouldShowDegradedRedisStore`；修复前无 `redis fallback` 提示。
+- **关闭方式**：新增 core SPI `Degradable`；fallback 包装实现它；健康检查在降级时
+  输出 DEGRADED + `degradedReason`；诊断表输出降级提示并把 tier 降为 T0。

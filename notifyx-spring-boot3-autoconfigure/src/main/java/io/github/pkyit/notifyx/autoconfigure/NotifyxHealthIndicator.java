@@ -9,6 +9,7 @@ import org.springframework.boot.actuate.health.HealthIndicator;
 
 import io.github.pkyit.notifyx.core.model.HealthStatus;
 import io.github.pkyit.notifyx.core.spi.DedupeStore;
+import io.github.pkyit.notifyx.core.spi.Degradable;
 import io.github.pkyit.notifyx.core.spi.FailureStore;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.RateLimiter;
@@ -95,7 +96,8 @@ public final class NotifyxHealthIndicator implements HealthIndicator {
         }
 
         boolean degraded = !downChannels.isEmpty() || !disabledChannels.isEmpty()
-                || isMemory(dedupeStore) || isMemory(rateLimiter);
+                || isMemory(dedupeStore) || isMemory(rateLimiter)
+                || isDegraded(dedupeStore) || isDegraded(rateLimiter);
         Health.Builder builder = degraded ? Health.status("DEGRADED") : Health.up();
         builder.withDetail("mode", properties.getMode())
                 .withDetail("channels", channelNames())
@@ -109,7 +111,10 @@ public final class NotifyxHealthIndicator implements HealthIndicator {
         if (!disabledChannels.isEmpty()) {
             builder.withDetail("disabledChannels", disabledChannels);
         }
-        if (isMemory(dedupeStore) || isMemory(rateLimiter)) {
+        if (isDegraded(dedupeStore) || isDegraded(rateLimiter)) {
+            builder.withDetail("degradedReason",
+                    "redis fallback active: using in-memory dedupe/rate limiter");
+        } else if (isMemory(dedupeStore) || isMemory(rateLimiter)) {
             builder.withDetail("degradedReason", "in-memory dedupe/rate limiter: multi-instance may duplicate");
         }
         return builder.build();
@@ -137,6 +142,10 @@ public final class NotifyxHealthIndicator implements HealthIndicator {
         }
         String name = spi.getClass().getSimpleName().toLowerCase(Locale.ROOT);
         return name.contains("memory") || name.contains("inmemory");
+    }
+
+    private static boolean isDegraded(Object spi) {
+        return spi instanceof Degradable degradable && degradable.isDegraded();
     }
 
     private static boolean isEnabled(NotifyChannel channel) {

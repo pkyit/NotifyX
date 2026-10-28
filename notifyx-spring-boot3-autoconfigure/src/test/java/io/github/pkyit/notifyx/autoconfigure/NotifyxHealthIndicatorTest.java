@@ -1,6 +1,9 @@
 package io.github.pkyit.notifyx.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import java.time.Duration;
 import java.util.List;
@@ -15,8 +18,11 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import io.github.pkyit.notifyx.channel.log.LogChannelAutoConfiguration;
 import io.github.pkyit.notifyx.core.model.HealthStatus;
 import io.github.pkyit.notifyx.core.model.SendResult;
+import io.github.pkyit.notifyx.core.spi.DedupeStore;
+import io.github.pkyit.notifyx.core.spi.Degradable;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.NotifyContext;
+import io.github.pkyit.notifyx.core.spi.RateLimiter;
 import io.github.pkyit.notifyx.core.support.InMemoryFailureStore;
 import io.github.pkyit.notifyx.core.support.MemoryDedupeStore;
 import io.github.pkyit.notifyx.core.support.MemoryRateLimiter;
@@ -122,6 +128,20 @@ class NotifyxHealthIndicatorTest {
 
         assertThat(health.getStatus().getCode()).isEqualTo("DEGRADED");
         assertThat(health.getDetails().get("disabledChannels")).asString().contains("disabled");
+    }
+
+    @Test
+    @DisplayName("Redis 降级包装 isDegraded=true → DEGRADED")
+    void shouldReportDegradedWhenStoreFallsBack() {
+        DedupeStore degraded = mock(DedupeStore.class, withSettings().extraInterfaces(Degradable.class));
+        when(((Degradable) degraded).isDegraded()).thenReturn(true);
+        NotifyxHealthIndicator indicator = new NotifyxHealthIndicator(new NotifyxProperties(),
+                List.of(new UpChannel()), degraded, mock(RateLimiter.class), new InMemoryFailureStore());
+
+        Health health = indicator.health();
+
+        assertThat(health.getStatus().getCode()).isEqualTo("DEGRADED");
+        assertThat(health.getDetails().get("degradedReason")).asString().contains("redis fallback");
     }
 
     private static final class DisabledChannel implements NotifyChannel {

@@ -3,6 +3,9 @@ package io.github.pkyit.notifyx.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import java.time.Duration;
 import java.util.List;
@@ -14,8 +17,11 @@ import org.junit.jupiter.api.Test;
 import io.github.pkyit.notifyx.core.model.SendResult;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
+import io.github.pkyit.notifyx.core.spi.DedupeStore;
+import io.github.pkyit.notifyx.core.spi.Degradable;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
 import io.github.pkyit.notifyx.core.spi.NotifyContext;
+import io.github.pkyit.notifyx.core.spi.RateLimiter;
 import io.github.pkyit.notifyx.core.support.DefaultMasker;
 import io.github.pkyit.notifyx.core.support.InMemoryFailureStore;
 import io.github.pkyit.notifyx.core.support.LoggingAuditRecorder;
@@ -142,6 +148,22 @@ class NotifyxDiagnosticsTest {
 
         assertThat(table).contains("templates.engine=freemarker");
         assertThat(table).contains("SimpleTemplateEngine");
+    }
+
+    @Test
+    @DisplayName("Redis 降级包装在诊断表标记降级并降为 T0")
+    void shouldShowDegradedRedisStore() {
+        DedupeStore degraded = mock(DedupeStore.class, withSettings().extraInterfaces(Degradable.class));
+        when(((Degradable) degraded).isDegraded()).thenReturn(true);
+        NotifyxDiagnostics diagnostics = new NotifyxDiagnostics(new NotifyxProperties(),
+                List.of(new StubChannel("log")), new SimpleTemplateEngine(), Map.of(), degraded,
+                mock(RateLimiter.class), new InMemoryFailureStore(), new LoggingAuditRecorder(),
+                new DefaultMasker(), NotifyTaskExecutor.direct());
+
+        String table = diagnostics.render();
+
+        assertThat(table).contains("Redis 降级中，当前使用内存实现");
+        assertThat(table).contains("tier=T0");
     }
 
     private static NotifyxDiagnostics diagnostics(List<NotifyChannel> channels) {
