@@ -467,3 +467,12 @@
   修复前 envelope.params 为原文。
 - **关闭方式**：新增 `mask.before-persist`（默认 false）；`NotifyEnvelope.withParams`
   替换 params；Pipeline 在开关开启时对 envelope.params 调 `maskParams`。
+
+## ISSUE-048 `notifyx.diagnostics.fail-fast` 绑定后不生效
+- **状态**：CLOSED（iter-54）
+- **现象**：设计书 §14.1 把 `diagnostics.fail-fast` 定义为显式严格模式，但代码从未读取；
+  缺渠道/全部渠道禁用时应用仍正常启动。
+- **证据**：`NotifyxDiagnosticsTest.shouldFailFastWhenAllChannelsDisabled` /
+  `shouldNotFailFastByDefault`；修复前 `fail-fast=true` 不抛异常。
+- **关闭方式**：`NotifyxDiagnostics` 实现 `InitializingBean`；`fail-fast=true` 时
+  无渠道/全部渠道禁用抛 `IllegalStateException`；默认 false 行为不变。

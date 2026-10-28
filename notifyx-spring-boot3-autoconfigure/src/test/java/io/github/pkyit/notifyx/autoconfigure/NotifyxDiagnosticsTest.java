@@ -1,6 +1,8 @@
 package io.github.pkyit.notifyx.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.List;
@@ -85,10 +87,51 @@ class NotifyxDiagnosticsTest {
         assertThat(diagnostics.render()).isNotBlank();
     }
 
+    @Test
+    @DisplayName("fail-fast=true 且全部渠道禁用时启动失败")
+    void shouldFailFastWhenAllChannelsDisabled() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getDiagnostics().setFailFast(true);
+        NotifyxDiagnostics diagnostics = new NotifyxDiagnostics(properties, List.of(new DisabledChannel()),
+                new SimpleTemplateEngine(), Map.of(), new MemoryDedupeStore(), new MemoryRateLimiter(),
+                new InMemoryFailureStore(), new LoggingAuditRecorder(), new DefaultMasker(),
+                NotifyTaskExecutor.direct());
+
+        assertThatThrownBy(diagnostics::afterPropertiesSet)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("all NotifyChannel disabled");
+    }
+
+    @Test
+    @DisplayName("fail-fast=false（默认）不因渠道禁用失败")
+    void shouldNotFailFastByDefault() {
+        NotifyxDiagnostics diagnostics = diagnostics(List.of(new DisabledChannel()));
+
+        assertThatCode(diagnostics::afterPropertiesSet).doesNotThrowAnyException();
+    }
+
     private static NotifyxDiagnostics diagnostics(List<NotifyChannel> channels) {
         return new NotifyxDiagnostics(new NotifyxProperties(), channels, new SimpleTemplateEngine(), Map.of(),
                 new MemoryDedupeStore(), new MemoryRateLimiter(), new InMemoryFailureStore(),
                 new LoggingAuditRecorder(), new DefaultMasker(), NotifyTaskExecutor.direct());
+    }
+
+    private static final class DisabledChannel implements NotifyChannel {
+
+        @Override
+        public String name() {
+            return "disabled";
+        }
+
+        @Override
+        public boolean isEnabled(NotifyContext ctx) {
+            return false;
+        }
+
+        @Override
+        public SendResult send(NotifyContext ctx) {
+            return SendResult.success("1", null, Duration.ZERO);
+        }
     }
 
     private static final class StubChannel implements NotifyChannel {
