@@ -206,6 +206,30 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         } else {
             builder.append("│   · 升级未启用：高频故障不会自动切到更高触达渠道\n");
         }
+        appendConfigMismatchWarnings(builder);
+    }
+
+    private void appendConfigMismatchWarnings(StringBuilder builder) {
+        String dedupeStoreConfig = properties.getDedupe().getStore();
+        if ("redis".equalsIgnoreCase(dedupeStoreConfig) && isMemory(dedupeStore)) {
+            builder.append("│   · ⚠ 配置 dedupe.store=redis，实际为内存实现（Redis 未装配或已降级）\n");
+        } else if ("jdbc".equalsIgnoreCase(dedupeStoreConfig) && isMemory(dedupeStore)) {
+            builder.append("│   · ⚠ jdbc 去重尚未实现，实际使用内存实现\n");
+        } else if ("memory".equalsIgnoreCase(dedupeStoreConfig) && !isMemory(dedupeStore)) {
+            builder.append("│   · ⚠ 配置 dedupe.store=memory，实际为非内存实现\n");
+        }
+        String rateLimitStore = properties.getRateLimit().getStore();
+        if ("redis".equalsIgnoreCase(rateLimitStore) && isMemory(rateLimiter)) {
+            builder.append("│   · ⚠ 配置 rate-limit.store=redis，实际为内存实现（Redis 未装配或已降级）\n");
+        } else if ("memory".equalsIgnoreCase(rateLimitStore) && !isMemory(rateLimiter)) {
+            builder.append("│   · ⚠ 配置 rate-limit.store=memory，实际为非内存实现\n");
+        }
+        String engine = properties.getTemplates().getEngine();
+        if (engine != null && !"simple".equalsIgnoreCase(engine)
+                && "SimpleTemplateEngine".equals(simpleName(templateEngine))) {
+            builder.append("│   · ⚠ 配置 templates.engine=").append(engine)
+                    .append("，实际仍为 SimpleTemplateEngine（未提供自定义 TemplateEngine Bean）\n");
+        }
     }
 
     private void appendActuatorHint(StringBuilder builder) {

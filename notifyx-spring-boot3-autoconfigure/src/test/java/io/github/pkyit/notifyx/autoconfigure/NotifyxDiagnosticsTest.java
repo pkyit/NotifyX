@@ -110,8 +110,46 @@ class NotifyxDiagnosticsTest {
         assertThatCode(diagnostics::afterPropertiesSet).doesNotThrowAnyException();
     }
 
+    @Test
+    @DisplayName("配置 dedupe.store=jdbc 但实际内存时给出警告")
+    void shouldWarnJdbcDedupeNotImplemented() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getDedupe().setStore("jdbc");
+
+        String table = diagnostics(properties, List.of(new StubChannel("log"))).render();
+
+        assertThat(table).contains("jdbc 去重尚未实现");
+    }
+
+    @Test
+    @DisplayName("配置 dedupe.store=redis 但实际内存时给出警告")
+    void shouldWarnRedisStoreMismatch() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getDedupe().setStore("redis");
+
+        String table = diagnostics(properties, List.of(new StubChannel("log"))).render();
+
+        assertThat(table).contains("配置 dedupe.store=redis，实际为内存实现");
+    }
+
+    @Test
+    @DisplayName("配置 templates.engine 非 simple 但实际仍为 SimpleTemplateEngine 时给出警告")
+    void shouldWarnTemplateEngineMismatch() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getTemplates().setEngine("freemarker");
+
+        String table = diagnostics(properties, List.of(new StubChannel("log"))).render();
+
+        assertThat(table).contains("templates.engine=freemarker");
+        assertThat(table).contains("SimpleTemplateEngine");
+    }
+
     private static NotifyxDiagnostics diagnostics(List<NotifyChannel> channels) {
-        return new NotifyxDiagnostics(new NotifyxProperties(), channels, new SimpleTemplateEngine(), Map.of(),
+        return diagnostics(new NotifyxProperties(), channels);
+    }
+
+    private static NotifyxDiagnostics diagnostics(NotifyxProperties properties, List<NotifyChannel> channels) {
+        return new NotifyxDiagnostics(properties, channels, new SimpleTemplateEngine(), Map.of(),
                 new MemoryDedupeStore(), new MemoryRateLimiter(), new InMemoryFailureStore(),
                 new LoggingAuditRecorder(), new DefaultMasker(), NotifyTaskExecutor.direct());
     }

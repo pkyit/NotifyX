@@ -486,3 +486,12 @@
 - **关闭方式**：Redis 去重/限流 Bean 增加 `@ConditionalOnExpression`，只在
   `dedupe.store`/`rate-limit.store` 为 `auto` 或 `redis` 时生效。
 - **遗留**：`jdbc` 去重仍未实现，会落到内存；需单独立项（信创 DDL 待决策）。
+
+## ISSUE-050 诊断表不提示“配置与实现不一致”
+- **状态**：CLOSED（iter-56）
+- **现象**：`dedupe.store=redis`/`jdbc` 但实际内存、`templates.engine` 非 simple 但实际
+  `SimpleTemplateEngine` 时，诊断表只显示实现类名，用户可能误以为配置生效。
+- **证据**：`NotifyxDiagnosticsTest.shouldWarnJdbcDedupeNotImplemented` /
+  `shouldWarnRedisStoreMismatch` / `shouldWarnTemplateEngineMismatch`。
+- **关闭方式**：`NotifyxDiagnostics` 新增 `appendConfigMismatchWarnings`，在启动诊断表
+  输出配置/实际不一致的 WARN 行；不改变装配行为。
