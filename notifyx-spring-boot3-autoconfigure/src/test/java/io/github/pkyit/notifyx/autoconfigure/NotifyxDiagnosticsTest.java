@@ -166,6 +166,45 @@ class NotifyxDiagnosticsTest {
         assertThat(table).contains("tier=T0");
     }
 
+    @Test
+    @DisplayName("fail-fast=true 且 dedupe.store=jdbc 未实现时启动失败")
+    void shouldFailFastWhenJdbcDedupeNotImplemented() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getDiagnostics().setFailFast(true);
+        properties.getDedupe().setStore("jdbc");
+        NotifyxDiagnostics diagnostics = diagnostics(properties, List.of(new StubChannel("log")));
+
+        assertThatThrownBy(diagnostics::afterPropertiesSet)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("dedupe.store=jdbc is not implemented");
+    }
+
+    @Test
+    @DisplayName("fail-fast=true 且 templates.engine 与实际不符时启动失败")
+    void shouldFailFastWhenTemplateEngineMismatch() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getDiagnostics().setFailFast(true);
+        properties.getTemplates().setEngine("freemarker");
+        NotifyxDiagnostics diagnostics = diagnostics(properties, List.of(new StubChannel("log")));
+
+        assertThatThrownBy(diagnostics::afterPropertiesSet)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("templates.engine=freemarker");
+    }
+
+    @Test
+    @DisplayName("fail-fast=true 且 dedupe.store=redis 实际内存时启动失败")
+    void shouldFailFastWhenRedisDedupeMismatch() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getDiagnostics().setFailFast(true);
+        properties.getDedupe().setStore("redis");
+        NotifyxDiagnostics diagnostics = diagnostics(properties, List.of(new StubChannel("log")));
+
+        assertThatThrownBy(diagnostics::afterPropertiesSet)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("dedupe.store=redis");
+    }
+
     private static NotifyxDiagnostics diagnostics(List<NotifyChannel> channels) {
         return diagnostics(new NotifyxProperties(), channels);
     }

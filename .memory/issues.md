@@ -504,3 +504,12 @@
   `NotifyxDiagnosticsTest.shouldShowDegradedRedisStore`；修复前无 `redis fallback` 提示。
 - **关闭方式**：新增 core SPI `Degradable`；fallback 包装实现它；健康检查在降级时
   输出 DEGRADED + `degradedReason`；诊断表输出降级提示并把 tier 降为 T0。
+
+## ISSUE-052 `diagnostics.fail-fast` 未校验存储/引擎配置不一致
+- **状态**：CLOSED（iter-58）
+- **现象**：iter-54 的严格模式只校验渠道；`dedupe.store=jdbc` 未实现、`templates.engine`
+  不匹配等仍在严格模式下正常启动。
+- **证据**：`NotifyxDiagnosticsTest.shouldFailFastWhenJdbcDedupeNotImplemented` /
+  `shouldFailFastWhenTemplateEngineMismatch` / `shouldFailFastWhenRedisDedupeMismatch`。
+- **关闭方式**：`NotifyxDiagnostics.afterPropertiesSet()` 增加 store/engine 一致性检查；
+  仅 `fail-fast=true` 时抛 `IllegalStateException`，默认 false 仍只提示。

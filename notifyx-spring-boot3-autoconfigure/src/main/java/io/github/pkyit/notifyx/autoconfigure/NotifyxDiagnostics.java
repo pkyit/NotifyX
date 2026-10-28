@@ -96,6 +96,25 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         } else if (channels.stream().noneMatch(NotifyxDiagnostics::isEnabled)) {
             errors.add("all NotifyChannel disabled");
         }
+        String dedupeStoreConfig = properties.getDedupe().getStore();
+        if ("redis".equalsIgnoreCase(dedupeStoreConfig) && isMemory(dedupeStore)) {
+            errors.add("dedupe.store=redis but actual dedupe store is in-memory");
+        } else if ("jdbc".equalsIgnoreCase(dedupeStoreConfig) && isMemory(dedupeStore)) {
+            errors.add("dedupe.store=jdbc is not implemented yet");
+        } else if ("memory".equalsIgnoreCase(dedupeStoreConfig) && !isMemory(dedupeStore)) {
+            errors.add("dedupe.store=memory but actual dedupe store is not in-memory");
+        }
+        String rateLimitStoreConfig = properties.getRateLimit().getStore();
+        if ("redis".equalsIgnoreCase(rateLimitStoreConfig) && isMemory(rateLimiter)) {
+            errors.add("rate-limit.store=redis but actual rate limiter is in-memory");
+        } else if ("memory".equalsIgnoreCase(rateLimitStoreConfig) && !isMemory(rateLimiter)) {
+            errors.add("rate-limit.store=memory but actual rate limiter is not in-memory");
+        }
+        String engine = properties.getTemplates().getEngine();
+        if (engine != null && !"simple".equalsIgnoreCase(engine)
+                && "SimpleTemplateEngine".equals(simpleName(templateEngine))) {
+            errors.add("templates.engine=" + engine + " but actual engine is SimpleTemplateEngine");
+        }
         if (!errors.isEmpty()) {
             throw new IllegalStateException("notifyx diagnostics fail-fast: " + String.join("; ", errors));
         }
