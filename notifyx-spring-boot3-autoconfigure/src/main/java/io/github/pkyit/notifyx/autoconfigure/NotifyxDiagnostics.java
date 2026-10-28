@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 
@@ -31,7 +32,7 @@ import io.github.pkyit.notifyx.core.spi.TemplateEngine;
  *
  * @since 1.0
  */
-public final class NotifyxDiagnostics implements ApplicationListener<ApplicationReadyEvent> {
+public final class NotifyxDiagnostics implements ApplicationListener<ApplicationReadyEvent>, InitializingBean {
 
     private static final Logger log = LoggerFactory.getLogger(NotifyxDiagnostics.class);
 
@@ -74,6 +75,29 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         this.auditRecorder = auditRecorder;
         this.masker = masker;
         this.taskExecutor = taskExecutor;
+    }
+
+    /**
+     * 严格模式：{@code notifyx.diagnostics.fail-fast=true} 时校验“有没有可用渠道”。
+     *
+     * <p>设计书 §14.1 承诺默认不因缺配置启动失败；只有用户显式打开 fail-fast 才抛异常。</p>
+     *
+     * @throws IllegalStateException 没有渠道或全部渠道禁用
+     */
+    @Override
+    public void afterPropertiesSet() {
+        if (!properties.getDiagnostics().isFailFast()) {
+            return;
+        }
+        List<String> errors = new ArrayList<>();
+        if (channels.isEmpty()) {
+            errors.add("no NotifyChannel registered");
+        } else if (channels.stream().noneMatch(NotifyxDiagnostics::isEnabled)) {
+            errors.add("all NotifyChannel disabled");
+        }
+        if (!errors.isEmpty()) {
+            throw new IllegalStateException("notifyx diagnostics fail-fast: " + String.join("; ", errors));
+        }
     }
 
     @Override

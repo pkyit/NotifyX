@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-28 06:00（夜间巡检收尾）
+> 更新时间：2026-10-28 19:05（iter-54：diagnostics.fail-fast）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，299 测试执行 + 13 live 跳过（共 312 用例）；`mvn -Prelease -Dgpg.skip=true package`
+> 17 个模块，301 测试执行 + 13 live 跳过（共 314 用例）；`mvn -Prelease -Dgpg.skip=true package`
 > 需在普通终端复验（本沙箱 javadoc 目标目录不可写，见 `env.md` §13）。
 
 ## 1. 一句话现状
@@ -30,8 +30,9 @@ iter-48 补上 `notifyx.queue.size` 队列水位 gauge；iter-49 补上
 `queue.discarded`（shutdown）并打印前 20 条 level/key；iter-51 让全部渠道禁用时
 健康状态变为 DOWN、部分禁用为 DEGRADED；iter-52 让 `mask.before-send` 对渲染内容和
 渠道参数生效（`NotifyContext.params()`）；iter-53 新增 `mask.before-persist`，
-可选脱敏失败落盘 envelope。
-Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~53 是 **1.0.1 候选**，
+可选脱敏失败落盘 envelope；iter-54 让 `diagnostics.fail-fast` 在无渠道/全部禁用时
+阻止启动（默认仍关闭）。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~54 是 **1.0.1 候选**，
 Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计。
 
 ## 2. 已实现（按设计书章节）
@@ -108,6 +109,7 @@ Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计�
 - [x] **全渠道禁用健康状态** —— iter-51（全部禁用 DOWN / 部分禁用 DEGRADED）
 - [x] **before-send 脱敏** —— iter-52（渲染内容 + `NotifyContext.params()`，默认关闭）
 - [x] **before-persist 脱敏** —— iter-53（失败 envelope params，默认关闭）
+- [x] **diagnostics.fail-fast** —— iter-54（无渠道/全禁用时阻止启动，默认关闭）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -233,6 +235,8 @@ sms4j 适配。
   全量 verify 311 用例（298 执行 + 13 live 跳过）。
 - iter-53：新增 `mask.before-persist`，可选脱敏失败落盘 envelope params；默认关闭。
   全量 verify 312 用例（299 执行 + 13 live 跳过）。
+- iter-54：`diagnostics.fail-fast=true` 时无渠道/全部渠道禁用阻止启动；默认关闭。
+  全量 verify 314 用例（301 执行 + 13 live 跳过）。
 - 未改版本号；1.0.0 已发布且 Central 额度 2026-11-01 前不可发新版本，本修复作为
   **1.0.1 候选**。
 - 新增 ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，
