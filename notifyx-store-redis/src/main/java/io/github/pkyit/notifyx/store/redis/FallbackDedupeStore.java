@@ -3,6 +3,7 @@ package io.github.pkyit.notifyx.store.redis;
 import java.time.Duration;
 
 import io.github.pkyit.notifyx.core.spi.DedupeStore;
+import io.github.pkyit.notifyx.core.spi.Degradable;
 
 /**
  * 去重降级包装：Redis 异常时退回内存实现，绝不让通知发送失败（设计书 §9.4）。
@@ -13,7 +14,7 @@ import io.github.pkyit.notifyx.core.spi.DedupeStore;
  *
  * @since 1.0
  */
-public final class FallbackDedupeStore implements DedupeStore {
+public final class FallbackDedupeStore implements DedupeStore, Degradable {
 
     private final DedupeStore primary;
     private final DedupeStore fallback;
@@ -76,6 +77,7 @@ public final class FallbackDedupeStore implements DedupeStore {
      *
      * @return 是否降级
      */
+    @Override
     public boolean isDegraded() {
         return degradation.isOpen();
     }

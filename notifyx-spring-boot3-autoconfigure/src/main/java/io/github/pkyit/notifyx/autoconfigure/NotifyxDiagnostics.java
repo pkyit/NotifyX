@@ -14,6 +14,7 @@ import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
 import io.github.pkyit.notifyx.core.spi.AuditRecorder;
 import io.github.pkyit.notifyx.core.spi.DedupeStore;
+import io.github.pkyit.notifyx.core.spi.Degradable;
 import io.github.pkyit.notifyx.core.spi.FailureStore;
 import io.github.pkyit.notifyx.core.spi.Masker;
 import io.github.pkyit.notifyx.core.spi.NotifyChannel;
@@ -176,6 +177,8 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         builder.append("│   ").append(pad(label)).append(' ').append(simpleName(spi));
         if (isMemory(spi)) {
             builder.append("  ⚠ 单机内存，多实例部署下能力受限");
+        } else if (isDegraded(spi)) {
+            builder.append("  ⚠ Redis 降级中，当前使用内存实现");
         }
         builder.append('\n');
     }
@@ -240,10 +243,15 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
     }
 
     private String capabilityTier() {
-        if (isMemory(dedupeStore) || isMemory(rateLimiter)) {
+        if (isMemory(dedupeStore) || isMemory(rateLimiter)
+                || isDegraded(dedupeStore) || isDegraded(rateLimiter)) {
             return "T0（单机内存）";
         }
         return "T1+（外部存储）";
+    }
+
+    private static boolean isDegraded(Object spi) {
+        return spi instanceof Degradable degradable && degradable.isDegraded();
     }
 
     private static String version() {

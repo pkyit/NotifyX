@@ -2,6 +2,7 @@ package io.github.pkyit.notifyx.store.redis;
 
 import java.time.Duration;
 
+import io.github.pkyit.notifyx.core.spi.Degradable;
 import io.github.pkyit.notifyx.core.spi.RateLimiter;
 
 /**
@@ -13,7 +14,7 @@ import io.github.pkyit.notifyx.core.spi.RateLimiter;
  *
  * @since 1.0
  */
-public final class FallbackRateLimiter implements RateLimiter {
+public final class FallbackRateLimiter implements RateLimiter, Degradable {
 
     private final RateLimiter primary;
     private final RateLimiter fallback;
@@ -69,6 +70,7 @@ public final class FallbackRateLimiter implements RateLimiter {
      *
      * @return 是否降级
      */
+    @Override
     public boolean isDegraded() {
         return degradation.isOpen();
     }
