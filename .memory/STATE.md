@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-28 22:05（iter-57：Redis 降级状态）
+> 更新时间：2026-10-28 23:05（iter-58：fail-fast 配置校验）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，308 测试执行 + 13 live 跳过（共 321 用例）；`mvn -Prelease -Dgpg.skip=true package`
+> 17 个模块，311 测试执行 + 13 live 跳过（共 324 用例）；`mvn -Prelease -Dgpg.skip=true package`
 > 需在普通终端复验（本沙箱 javadoc 目标目录不可写，见 `env.md` §13）。
 
 ## 1. 一句话现状
@@ -33,8 +33,9 @@ iter-48 补上 `notifyx.queue.size` 队列水位 gauge；iter-49 补上
 可选脱敏失败落盘 envelope；iter-54 让 `diagnostics.fail-fast` 在无渠道/全部禁用时
 阻止启动（默认仍关闭）；iter-55 让 `dedupe.store`/`rate-limit.store=memory`
 真正跳过 Redis 自动装配；iter-56 在启动诊断表提示配置与实现不一致；
-iter-57 让 Redis 降级包装通过 `Degradable` 进入健康检查与诊断表（tier 降 T0）。
-Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~57 是 **1.0.1 候选**，
+iter-57 让 Redis 降级包装通过 `Degradable` 进入健康检查与诊断表（tier 降 T0）；
+iter-58 让 `diagnostics.fail-fast` 同时校验 store/engine 配置不一致。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~58 是 **1.0.1 候选**，
 Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计。
 
 ## 2. 已实现（按设计书章节）
@@ -115,6 +116,7 @@ Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计�
 - [x] **存储选择生效** —— iter-55（`dedupe.store`/`rate-limit.store=memory` 跳过 Redis）
 - [x] **配置不一致诊断** —— iter-56（store/engine 与实际不一致时启动告警）
 - [x] **Redis 降级可见** —— iter-57（`Degradable`；健康 DEGRADED，诊断 tier 降 T0）
+- [x] **fail-fast 配置校验** —— iter-58（store/engine 不一致时严格模式阻止启动）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -248,6 +250,8 @@ sms4j 适配。
   全量 verify 319 用例（306 执行 + 13 live 跳过）。
 - iter-57：新增 `Degradable` SPI；Redis 降级包装进入健康检查与诊断表，tier 降 T0。
   全量 verify 321 用例（308 执行 + 13 live 跳过）。
+- iter-58：`diagnostics.fail-fast=true` 时同时校验 dedupe/rate-limit store 与 engine 配置。
+  全量 verify 324 用例（311 执行 + 13 live 跳过）。
 - 未改版本号；1.0.0 已发布且 Central 额度 2026-11-01 前不可发新版本，本修复作为
   **1.0.1 候选**。
 - 新增 ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，
