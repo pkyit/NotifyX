@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-28 20:05（iter-55：存储选择生效）
+> 更新时间：2026-10-28 21:05（iter-56：配置不一致诊断）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，303 测试执行 + 13 live 跳过（共 316 用例）；`mvn -Prelease -Dgpg.skip=true package`
+> 17 个模块，306 测试执行 + 13 live 跳过（共 319 用例）；`mvn -Prelease -Dgpg.skip=true package`
 > 需在普通终端复验（本沙箱 javadoc 目标目录不可写，见 `env.md` §13）。
 
 ## 1. 一句话现状
@@ -32,8 +32,8 @@ iter-48 补上 `notifyx.queue.size` 队列水位 gauge；iter-49 补上
 渠道参数生效（`NotifyContext.params()`）；iter-53 新增 `mask.before-persist`，
 可选脱敏失败落盘 envelope；iter-54 让 `diagnostics.fail-fast` 在无渠道/全部禁用时
 阻止启动（默认仍关闭）；iter-55 让 `dedupe.store`/`rate-limit.store=memory`
-真正跳过 Redis 自动装配。
-Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~55 是 **1.0.1 候选**，
+真正跳过 Redis 自动装配；iter-56 在启动诊断表提示配置与实现不一致。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~56 是 **1.0.1 候选**，
 Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计。
 
 ## 2. 已实现（按设计书章节）
@@ -112,6 +112,7 @@ Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计�
 - [x] **before-persist 脱敏** —— iter-53（失败 envelope params，默认关闭）
 - [x] **diagnostics.fail-fast** —— iter-54（无渠道/全禁用时阻止启动，默认关闭）
 - [x] **存储选择生效** —— iter-55（`dedupe.store`/`rate-limit.store=memory` 跳过 Redis）
+- [x] **配置不一致诊断** —— iter-56（store/engine 与实际不一致时启动告警）
 - [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
 - [ ] consumer 多实例分区消费与死信/重试
 - [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
@@ -241,6 +242,8 @@ sms4j 适配。
   全量 verify 314 用例（301 执行 + 13 live 跳过）。
 - iter-55：`dedupe.store` / `rate-limit.store=memory` 真正跳过 Redis 自动装配。
   全量 verify 316 用例（303 执行 + 13 live 跳过）。
+- iter-56：启动诊断表提示 store/engine 配置与实际实现不一致；不改变装配行为。
+  全量 verify 319 用例（306 执行 + 13 live 跳过）。
 - 未改版本号；1.0.0 已发布且 Central 额度 2026-11-01 前不可发新版本，本修复作为
   **1.0.1 候选**。
 - 新增 ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，
