@@ -59,6 +59,26 @@ class MetricsAutoConfigurationTest {
                 });
     }
 
+    @Test
+    @DisplayName("真实装配顺序：MeterRegistry 来自另一个自动配置时仍能装配（after 排序，iter-59 回归）")
+    void shouldAssembleWhenRegistryProvidedByAutoConfiguration() {
+        // MeterRegistry 由「另一个自动配置」提供（真实环境里是 Boot actuator 的
+        // MetricsAutoConfiguration / SimpleMetricsExportAutoConfiguration，此处用同 FQCN 的
+        // test fixture 模拟）；故意按「NotifyX 在前」的声明顺序传入，
+        // @AutoConfigureAfter(name=...) 必须把排序纠正回来，否则 @ConditionalOnBean 恒不成立
+        ApplicationContextRunner reversed = new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        NotifyxMetricsAutoConfiguration.class,
+                        org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration.class));
+        reversed.run(context -> {
+            assertThat(context).hasSingleBean(NotifyMetrics.class);
+            assertThat(context.getBean(NotifyMetrics.class)).isInstanceOf(MicrometerNotifyMetrics.class);
+            context.getBean(NotifyMetrics.class).eventReceived(event(), "L4");
+            MeterRegistry registry = context.getBean(MeterRegistry.class);
+            assertThat(registry.get("notifyx.event.received").counter().count()).isEqualTo(1.0);
+        });
+    }
+
     private static NotifyEvent event() {
         return NotifyEvent.builder("S1").level(Level.WARN).build();
     }
