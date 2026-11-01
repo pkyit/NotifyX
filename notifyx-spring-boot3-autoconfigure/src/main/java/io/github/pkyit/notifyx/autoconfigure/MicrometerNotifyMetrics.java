@@ -30,6 +30,7 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
     private final MeterRegistry registry;
     private final String prefix;
     private final AtomicInteger queueSize = new AtomicInteger();
+    private final AtomicInteger deferredPending = new AtomicInteger();
     private final Map<String, AtomicInteger> circuitStates = new ConcurrentHashMap<>();
 
     /**
@@ -55,6 +56,7 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
         }
         this.prefix = normalized.isEmpty() ? "notifyx" : normalized;
         Gauge.builder(metricName("queue.size"), queueSize, AtomicInteger::get).register(registry);
+        Gauge.builder(metricName("deferred.pending"), deferredPending, AtomicInteger::get).register(registry);
     }
 
     @Override
@@ -106,6 +108,36 @@ public final class MicrometerNotifyMetrics implements NotifyMetrics {
     @Override
     public void queueSize(int size) {
         queueSize.set(Math.max(0, size));
+    }
+
+    @Override
+    public void deferredScheduled(String scene) {
+        Counter.builder(metricName("deferred.scheduled"))
+                .tag("scene", scene)
+                .register(registry)
+                .increment();
+    }
+
+    @Override
+    public void deferredDelivered(String scene) {
+        Counter.builder(metricName("deferred.delivered"))
+                .tag("scene", scene)
+                .register(registry)
+                .increment();
+    }
+
+    @Override
+    public void deferredDropped(String reason, String scene) {
+        Counter.builder(metricName("deferred.dropped"))
+                .tag("reason", reason)
+                .tag("scene", scene)
+                .register(registry)
+                .increment();
+    }
+
+    @Override
+    public void deferredPending(int size) {
+        deferredPending.set(Math.max(0, size));
     }
 
     @Override

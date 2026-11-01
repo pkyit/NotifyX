@@ -114,6 +114,30 @@ class MicrometerNotifyMetricsTest {
     }
 
     @Test
+    @DisplayName("延后投递：受理/到期/丢弃计数与水位 gauge")
+    void shouldRecordDeferredMetrics() {
+        metrics.deferredScheduled("ORDER_CREATE_FAIL");
+        metrics.deferredDelivered("ORDER_CREATE_FAIL");
+        metrics.deferredDropped("overflow", "ORDER_CREATE_FAIL");
+        metrics.deferredPending(3);
+
+        assertThat(registry.get("notifyx.deferred.scheduled")
+                .tag("scene", "ORDER_CREATE_FAIL")
+                .counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("notifyx.deferred.delivered")
+                .tag("scene", "ORDER_CREATE_FAIL")
+                .counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("notifyx.deferred.dropped")
+                .tag("reason", "overflow")
+                .tag("scene", "ORDER_CREATE_FAIL")
+                .counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("notifyx.deferred.pending").gauge().value()).isEqualTo(3.0);
+
+        metrics.deferredPending(-2);
+        assertThat(registry.get("notifyx.deferred.pending").gauge().value()).isZero();
+    }
+
+    @Test
     @DisplayName("熔断状态 gauge：OPEN=2 / HALF_OPEN=1 / CLOSED=0")
     void shouldRecordCircuitState() {
         metrics.circuitState("email", "OPEN");

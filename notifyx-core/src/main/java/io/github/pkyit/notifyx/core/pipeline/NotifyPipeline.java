@@ -154,8 +154,7 @@ public final class NotifyPipeline {
                 return false;
             }
             if (verdict.decision() == FilterVerdict.Decision.DEFER) {
-                defer(event, verdict);
-                return true;
+                return defer(event, verdict);
             }
             boolean failed = dispatch(event, scene, level, renderParams, dedupeKey);
             if (!failed && escalation != null) {
@@ -472,14 +471,29 @@ public final class NotifyPipeline {
                 SendResult.suppressed(statusFor(reason), reason), Duration.ZERO, 0);
     }
 
-    private void defer(NotifyEvent event, FilterVerdict verdict) {
+    /**
+     * 把事件交给延后处理器。
+     *
+     * @param event 事件
+     * @param verdict DEFER 裁决
+     * @return 是否真正受理（handler 缺失或抛异常时退化为抑制并返回 false）
+     */
+    private boolean defer(NotifyEvent event, FilterVerdict verdict) {
         if (deferredHandler == null || verdict.deferUntil() == null) {
             reject(event, "deferred-unsupported");
-            return;
+            return false;
         }
-        deferredHandler.defer(event, verdict.deferUntil());
+        try {
+            deferredHandler.defer(event, verdict.deferUntil());
+        } catch (RuntimeException ex) {
+            // 自定义 DeferredHandler 可能抛异常：不能让它打断管线，也不能丢审计线索
+            log.warn("notifyx deferred handler failed for scene={}: {}", event.scene(), ex.toString());
+            reject(event, "deferred-error");
+            return false;
+        }
         audit(event, event.level(), "-", null,
                 SendResult.suppressed(SendResult.Status.SUPPRESSED, "deferred"), Duration.ZERO, 0);
+        return true;
     }
 
     private static SendResult.Status statusFor(String reason) {

@@ -835,6 +835,7 @@ public class NotifyxProperties {
         private String timezone = "Asia/Shanghai";
         private boolean defer = true;
         private boolean criticalBypass = true;
+        private int maxDeferred = 10_000;
 
         public boolean isEnabled() {
             return enabled;
@@ -882,6 +883,14 @@ public class NotifyxProperties {
 
         public void setCriticalBypass(boolean criticalBypass) {
             this.criticalBypass = criticalBypass;
+        }
+
+        public int getMaxDeferred() {
+            return maxDeferred;
+        }
+
+        public void setMaxDeferred(int maxDeferred) {
+            this.maxDeferred = maxDeferred;
         }
     }
 

@@ -14,7 +14,9 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
 import io.github.pkyit.notifyx.core.model.SendResult;
+import io.github.pkyit.notifyx.core.pipeline.InMemoryDeferredHandler;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
 import io.github.pkyit.notifyx.core.spi.DedupeStore;
@@ -203,6 +205,49 @@ class NotifyxDiagnosticsTest {
         assertThatThrownBy(diagnostics::afterPropertiesSet)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("dedupe.store=redis");
+    }
+
+    @Test
+    @DisplayName("免打扰开启且 defer=true：诊断表展示延后投递器与容量")
+    void shouldShowDeferredHandlerWhenQuietHoursEnabled() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getQuietHours().setEnabled(true);
+        InMemoryDeferredHandler handler = new InMemoryDeferredHandler(
+                new InMemoryDeferredHandler.Config(100), NotifyMetrics.noop());
+        NotifyxDiagnostics diagnostics = new NotifyxDiagnostics(properties, List.of(new StubChannel("log")),
+                new SimpleTemplateEngine(), Map.of(), new MemoryDedupeStore(), new MemoryRateLimiter(),
+                new InMemoryFailureStore(), new LoggingAuditRecorder(), new DefaultMasker(),
+                NotifyTaskExecutor.direct(), handler);
+
+        String table = diagnostics.render();
+
+        assertThat(table).contains("延后到窗口结束再发");
+        assertThat(table).contains("InMemoryDeferredHandler");
+        assertThat(table).contains("100");
+        handler.close();
+    }
+
+    @Test
+    @DisplayName("免打扰开启、defer=true 但没有延后投递器时给出警告")
+    void shouldWarnWhenDeferEnabledButNoHandler() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getQuietHours().setEnabled(true);
+
+        String table = diagnostics(properties, List.of(new StubChannel("log"))).render();
+
+        assertThat(table).contains("没有 DeferredHandler 装配");
+    }
+
+    @Test
+    @DisplayName("免打扰开启、defer=false 时明确提示直接丢弃")
+    void shouldShowDropModeWhenDeferDisabled() {
+        NotifyxProperties properties = new NotifyxProperties();
+        properties.getQuietHours().setEnabled(true);
+        properties.getQuietHours().setDefer(false);
+
+        String table = diagnostics(properties, List.of(new StubChannel("log"))).render();
+
+        assertThat(table).contains("defer=false，命中事件直接丢弃");
     }
 
     private static NotifyxDiagnostics diagnostics(List<NotifyChannel> channels) {

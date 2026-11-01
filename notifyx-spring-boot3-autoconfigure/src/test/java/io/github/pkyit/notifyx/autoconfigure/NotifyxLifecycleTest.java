@@ -75,6 +75,21 @@ class NotifyxLifecycleTest {
     }
 
     @Test
+    @DisplayName("stop() 关闭延后投递器，且不影响渠道关闭")
+    void shouldCloseDeferredHandler() {
+        AtomicBoolean handlerClosed = new AtomicBoolean();
+        AutoCloseable handler = () -> handlerClosed.set(true);
+        NotifyxLifecycle lifecycle = new NotifyxLifecycle(NotifyTaskExecutor.direct(), List.of(channel),
+                Duration.ZERO, null, handler);
+        lifecycle.start();
+
+        lifecycle.stop();
+
+        assertThat(handlerClosed).isTrue();
+        assertThat(channel.closed).isTrue();
+    }
+
+    @Test
     @DisplayName("phase 晚于 Web 优雅停机、早于普通 Bean 销毁")
     void shouldUseEarlyButSafePhase() {
         assertThat(NotifyxLifecycle.PHASE).isLessThan(NotifyxLifecycle.DEFAULT_PHASE);
