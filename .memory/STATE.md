@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-10-28 23:05（iter-58：fail-fast 配置校验）
+> 更新时间：2026-11-02 00:45（iter-59：免打扰 defer 补全 + demo 实证）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
-> 构建基线：`mvn -B clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，311 测试执行 + 13 live 跳过（共 324 用例）；`mvn -Prelease -Dgpg.skip=true package`
+> 构建基线：`mvn -B clean install` 通过（Spotless/Checkstyle/JaCoCo 全绿），
+> 17 个模块，334 测试执行 + 13 live 跳过（共 347 用例）；`mvn -Prelease -Dgpg.skip=true package`
 > 需在普通终端复验（本沙箱 javadoc 目标目录不可写，见 `env.md` §13）。
 
 ## 1. 一句话现状
@@ -34,8 +34,10 @@ iter-48 补上 `notifyx.queue.size` 队列水位 gauge；iter-49 补上
 阻止启动（默认仍关闭）；iter-55 让 `dedupe.store`/`rate-limit.store=memory`
 真正跳过 Redis 自动装配；iter-56 在启动诊断表提示配置与实现不一致；
 iter-57 让 Redis 降级包装通过 `Degradable` 进入健康检查与诊断表（tier 降 T0）；
-iter-58 让 `diagnostics.fail-fast` 同时校验 store/engine 配置不一致。
-Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~58 是 **1.0.1 候选**，
+iter-58 让 `diagnostics.fail-fast` 同时校验 store/engine 配置不一致；
+iter-59 补全免打扰 defer：命中事件进入有界内存延迟队列（`InMemoryDeferredHandler`），
+窗口结束后重入管线，不再静默丢弃（修复设计书 §9.3 承诺）。
+Maven Central 已发布 **1.0.0**（iter-44，2026-10-27）；iter-45~59 是 **1.0.1 候选**，
 Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计。
 
 ## 2. 已实现（按设计书章节）
@@ -252,6 +254,15 @@ sms4j 适配。
   全量 verify 321 用例（308 执行 + 13 live 跳过）。
 - iter-58：`diagnostics.fail-fast=true` 时同时校验 dedupe/rate-limit store 与 engine 配置。
   全量 verify 324 用例（311 执行 + 13 live 跳过）。
+- iter-59：免打扰 defer 补全——`InMemoryDeferredHandler`（有界延迟队列、四态丢弃计数、
+  关闭幂等）+ 自动装配（`quiet-hours.enabled=true` 时生效，可自定义覆盖）+ 生命周期关闭 +
+  诊断三态提示 + `notifyx.deferred.*` 四指标；夜间命中事件延后到窗口结束重入管线。
+  自查修复 3 处：重放改经有界执行器（不再单线程串行排空）、defer/close 竞态加锁保证
+  恰好计量一次、handler 异常退化为抑制且 `handle()` 返回 false。
+  notifyx-demo 真实进程端到端实证 4/4 PASS（defer 不投递/审计留痕/窗口结束重投/
+  resend 去重收拢/指标可见/优雅关闭），顺带修复既有 bug：`NotifyxMetricsAutoConfiguration`
+  缺 `@AutoConfigureAfter` 导致真实应用下整套 `notifyx.*` 指标静默缺失（iter-41 测试盲区）。
+  全量 verify 347 用例（334 执行 + 13 live 跳过）。
 - 未改版本号；1.0.0 已发布且 Central 额度 2026-11-01 前不可发新版本，本修复作为
   **1.0.1 候选**。
 - 新增 ISSUE-039（OPEN）：`dedupe.default-window` 与 `defaults.silent-window` 语义冲突，

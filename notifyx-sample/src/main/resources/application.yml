@@ -109,6 +109,7 @@ notifyx:
     timezone: Asia/Shanghai
     defer: true
     critical-bypass: true
+    max-deferred: 10000
   global-mute:
     enabled: false
     mute-critical: true
