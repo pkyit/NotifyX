@@ -106,6 +106,10 @@ public class OrderService {
 
 **CRITICAL 旁路矩阵**：直通免打扰与限流、不聚合；去重窗口减半且不超过 60 秒（既不失聪也不刷屏）。
 
+**免打扰延后**：`quiet-hours` 命中且 `defer=true`（默认）时，事件进入内存延迟队列，
+窗口结束后重新进入管线（去重会把夜间堆积的同指纹事件收拢，不会清晨刷屏）；
+队列有 `max-deferred` 上限、重启丢失，丢弃均计入 `notifyx.deferred.*` 指标并在审计留 `SUPPRESSED` 记录。
+
 ## 模块
 
 | 模块 | 说明 | 依赖纪律 |
@@ -253,7 +257,9 @@ notifyx:
     from: "22:00"
     to: "09:00"
     timezone: Asia/Shanghai
+    defer: true               # 命中事件延后到窗口结束再发；false=直接丢弃（审计留痕）
     critical-bypass: true
+    max-deferred: 10000       # 延后队列上限，溢出丢弃并计数（T0 内存，重启丢失）
   global-mute:
     enabled: false            # 一键止血，运行时可由 Admin 切换
   events:

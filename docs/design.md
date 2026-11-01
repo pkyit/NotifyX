@@ -1318,8 +1318,16 @@ dedupeKey = sha256( scene ‖ "\u0001" ‖ bizId ‖ "\u0001" ‖ md5( sorted(pa
 | scene 限流 | per scene | 令牌桶（内存 / Redis Lua） | **丢弃优先级最低的**（ADR-008） | `status=rate-limited` |
 | 全局限流 | 全实例 | 令牌桶，阈值最高 | **发一条汇总摘要**，绝不完全静默 | `status=rate-limited` + `summary.sent` |
 | 号级限流 | per receiver | 仅短信渠道，运营商频控 | **排队延后**，不计失败 | `sms.deferred` |
-| 免打扰 | 全局/scene | `quiet-hours` 时间窗 | CRITICAL 直通，其余 defer 到工作时间 | `status=suppressed` |
+| 免打扰 | 全局 | `quiet-hours` 时间窗 | CRITICAL 直通，其余 defer 到窗口结束（T0 内存延后队列） | `status=suppressed` + `notifyx.deferred.*` |
 | 聚合窗口 | scene | 10~30s 收拢 | 合并成「涉及 N 台实例，首次 T1，最近 T2」 | `aggregate.merged` |
+
+**免打扰的 defer 语义（T0 实现边界）**：命中事件进入 `InMemoryDeferredHandler` 的有界延迟队列
+（容量 `notifyx.quiet-hours.max-deferred`，默认 10000），窗口结束后重新进入管线——此时免打扰放行，
+去重/限流/聚合照常生效，因此夜间堆积的同指纹事件会被去重收拢，不会在清晨刷屏。
+必须诚实说明三点：① 队列在 JVM 内存中，**重启即丢失**（持久化延后属 T1+ 能力）；
+② 溢出时丢弃并计入 `notifyx.deferred.dropped{reason=overflow}`；
+③ `defer=false` 或用户未提供任何 `DeferredHandler` 实现时，命中事件直接抑制，
+但审计留 `SUPPRESSED` 记录（`errorMsg=quiet-hours-drop / deferred-unsupported`），事后必可追查。
 
 **全局限流为什么要发摘要而不是静默丢弃**：`丢弃 = 失忆，摘要 = 知情`。运维看到「过去 1 分钟有 3,200 条 ORDER_CREATE_FAIL 被限流，样本如下」，能立刻判断是配置错误还是真故障；而完全静默会让运维以为「一切正常」。**这是防风暴设计里最容易被忽略但最重要的一条。**
 
@@ -2550,8 +2558,9 @@ notifyx:
     from: "22:00"
     to: "09:00"
     timezone: Asia/Shanghai
-    defer: true                           # true=延后到工作时间；false=直接丢弃
+    defer: true                           # true=延后到窗口结束再发；false=直接丢弃（审计留痕）
     critical-bypass: true                 # ★ CRITICAL 直通（§9.2）
+    max-deferred: 10000                   # 延后队列容量上限，溢出丢弃并计数（T0 内存，重启丢失）
 
   # ---------- 升级策略 ----------
   escalation:
@@ -2805,6 +2814,10 @@ public class EmailChannelAutoConfiguration {
 | `notifyx.send.duration` | timer | `channel`, `scene` | 渠道耗时。P95 > 3s 应告警 |
 | `notifyx.queue.size` | gauge | — | 队列水位。**持续 > 80% capacity 是即将丢事件的信号** |
 | `notifyx.queue.discarded` | counter | `reason`(queue-full/replaced), `level` | ★ 丢弃计数。**> 0 就应告警**，因为丢的是告警 |
+| `notifyx.deferred.scheduled` | counter | `scene` | 免打扰等机制受理并延后的事件数（§9.3） |
+| `notifyx.deferred.delivered` | counter | `scene` | 延后到期并重新进入管线的事件数 |
+| `notifyx.deferred.dropped` | counter | `reason`(overflow/shutdown/no-sink/sink-error), `scene` | ★ 延后事件丢弃计数。**持续 > 0 应告警** |
+| `notifyx.deferred.pending` | gauge | — | 延后队列水位。清晨前持续增长说明夜间堆积量 |
 | `notifyx.retry.attempts` | counter | `channel`, `attempt` | 重试分布。`attempt=3` 占比高说明渠道不稳定 |
 | `notifyx.fallback.pending` | gauge | `store` | 待补偿数。持续增长说明渠道长期不可用 |
 | `notifyx.fallback.dead` | gauge | — | 死信数。**> 0 应告警**，需人工介入 |
