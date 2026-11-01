@@ -64,6 +64,39 @@ public interface NotifyMetrics {
     }
 
     /**
+     * 事件被免打扰等机制受理并延后投递（设计书 §9.3）。
+     *
+     * @param scene 场景码
+     */
+    default void deferredScheduled(String scene) {
+    }
+
+    /**
+     * 延后事件到期并重新进入管线。
+     *
+     * @param scene 场景码
+     */
+    default void deferredDelivered(String scene) {
+    }
+
+    /**
+     * 延后事件被丢弃（溢出 / 关闭 / 无出口 / 出口异常）。
+     *
+     * @param reason 原因：overflow / shutdown / no-sink / sink-error
+     * @param scene 场景码
+     */
+    default void deferredDropped(String reason, String scene) {
+    }
+
+    /**
+     * 延后队列当前水位。
+     *
+     * @param size 队列长度
+     */
+    default void deferredPending(int size) {
+    }
+
+    /**
      * 渠道熔断状态。
      *
      * @param channel 渠道
