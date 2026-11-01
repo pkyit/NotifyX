@@ -38,6 +38,7 @@ public final class NotifyxLifecycle implements SmartLifecycle {
     private final List<NotifyChannel> channels;
     private final Duration shutdownAwait;
     private final AutoCloseable aggregator;
+    private final AutoCloseable deferredHandler;
     private final AtomicBoolean running = new AtomicBoolean();
 
     /**
@@ -48,7 +49,7 @@ public final class NotifyxLifecycle implements SmartLifecycle {
      * @param shutdownAwait 排空等待时长
      */
     public NotifyxLifecycle(NotifyTaskExecutor executor, List<NotifyChannel> channels, Duration shutdownAwait) {
-        this(executor, channels, shutdownAwait, null);
+        this(executor, channels, shutdownAwait, null, null);
     }
 
     /**
@@ -61,10 +62,25 @@ public final class NotifyxLifecycle implements SmartLifecycle {
      */
     public NotifyxLifecycle(NotifyTaskExecutor executor, List<NotifyChannel> channels, Duration shutdownAwait,
                             AutoCloseable aggregator) {
+        this(executor, channels, shutdownAwait, aggregator, null);
+    }
+
+    /**
+     * 构造生命周期。
+     *
+     * @param executor 执行器
+     * @param channels 渠道
+     * @param shutdownAwait 排空等待时长
+     * @param aggregator 聚合器（关闭时先汇总再停渠道），可为 null
+     * @param deferredHandler 延后投递器（关闭时未到期事件计数丢弃），可为 null
+     */
+    public NotifyxLifecycle(NotifyTaskExecutor executor, List<NotifyChannel> channels, Duration shutdownAwait,
+                            AutoCloseable aggregator, AutoCloseable deferredHandler) {
         this.executor = executor;
         this.channels = List.copyOf(channels);
         this.shutdownAwait = shutdownAwait == null ? Duration.ofSeconds(10) : shutdownAwait;
         this.aggregator = aggregator;
+        this.deferredHandler = deferredHandler;
     }
 
     @Override
@@ -99,6 +115,14 @@ public final class NotifyxLifecycle implements SmartLifecycle {
                 aggregator.close();
             } catch (Exception ex) {
                 log.warn("notifyx aggregator close failed: {}", ex.toString());
+            }
+        }
+        if (deferredHandler != null) {
+            try {
+                // 未到期的延后事件不能在此刻发出（仍在静默时段），计数丢弃
+                deferredHandler.close();
+            } catch (Exception ex) {
+                log.warn("notifyx deferred handler close failed: {}", ex.toString());
             }
         }
         for (NotifyChannel channel : channels) {

@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
@@ -31,8 +32,10 @@ import io.github.pkyit.notifyx.core.metrics.NotifyMetrics;
 import io.github.pkyit.notifyx.core.pipeline.Aggregator;
 import io.github.pkyit.notifyx.core.pipeline.ChannelRegistry;
 import io.github.pkyit.notifyx.core.pipeline.DefaultNotifyKit;
+import io.github.pkyit.notifyx.core.pipeline.DeferredHandler;
 import io.github.pkyit.notifyx.core.pipeline.EscalationPolicy;
 import io.github.pkyit.notifyx.core.pipeline.EventAggregator;
+import io.github.pkyit.notifyx.core.pipeline.InMemoryDeferredHandler;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.MqNotifyKit;
 import io.github.pkyit.notifyx.core.pipeline.NotifyPipeline;
@@ -319,6 +322,7 @@ public class NotifyxAutoConfiguration {
      * @param metrics 指标
      * @param taskExecutor 执行器
      * @param traceContext trace 读取口
+     * @param deferredHandlers 延后投递器（免打扰延后），可缺省
      * @param customFilters 用户自定义过滤器
      * @param environment 环境
      * @return 门面
@@ -340,11 +344,13 @@ public class NotifyxAutoConfiguration {
                                       TraceContext traceContext,
                                       EventAggregator aggregator,
                                       EscalationPolicy escalation,
+                                      ObjectProvider<DeferredHandler> deferredHandlers,
                                       ObjectProvider<EventFilter> customFilters,
                                       Environment environment) {
         List<EventFilter> filters = buildFilters(properties, dedupeStore, rateLimiter);
         customFilters.orderedStream().forEach(filters::add);
         filters.sort(Comparator.comparingInt(EventFilter::order));
+        DeferredHandler deferredHandler = deferredHandlers.getIfAvailable();
         NotifyPipeline pipeline = NotifyPipeline.builder()
                 .sceneRegistry(notifyxSceneRegistry(properties))
                 .filters(filters)
@@ -374,11 +380,24 @@ public class NotifyxAutoConfiguration {
                 .traceContext(traceContext)
                 .aggregator(aggregator)
                 .escalation(escalation)
+                .deferredHandler(deferredHandler)
                 .build();
         aggregator.sink(pipeline::handle);
-        log.info("notifyx pipeline assembled: filters={}, channels={}, escalationRules={}",
+        if (deferredHandler instanceof InMemoryDeferredHandler inMemory) {
+            // 重放必须经有界执行器：单线程直接 handle 会串行排空清晨堆积并绕过队列上限/优先级/水位观测，
+            // 与 DefaultNotifyKit 异步路径保持同一入口；拒绝时走既有拒绝日志而非无界阻塞
+            inMemory.sink(event -> {
+                try {
+                    taskExecutor.execute(event.level(), event.eventId(), () -> pipeline.handle(event));
+                } catch (RejectedExecutionException ex) {
+                    log.warn("notifyx deferred redelivery rejected scene={} eventId={}",
+                            event.scene(), event.eventId());
+                }
+            });
+        }
+        log.info("notifyx pipeline assembled: filters={}, channels={}, escalationRules={}, deferredHandler={}",
                 filters.size(), channels.orderedStream().map(NotifyChannel::name).toList(),
-                escalation.ruleCount());
+                escalation.ruleCount(), deferredHandler == null ? "none" : deferredHandler.getClass().getSimpleName());
         return new DefaultNotifyKit(pipeline, taskExecutor, traceContext);
     }
 
@@ -412,6 +431,24 @@ public class NotifyxAutoConfiguration {
         NotifyxProperties.Aggregate config = properties.getAggregate();
         return new Aggregator(new Aggregator.Config(config.isEnabled(), config.getWindow(),
                 config.getMaxEntries()));
+    }
+
+    /**
+     * 延后投递器（设计书 §9.3）：免打扰命中的事件延后到窗口结束再重新进入管线。
+     *
+     * <p>T0 内存实现：有界、溢出计数丢弃、重启丢失；仅在 {@code notifyx.quiet-hours.enabled=true}
+     * 时装配。用户可自定义 {@link DeferredHandler} Bean 覆盖（如持久化延迟队列）。</p>
+     *
+     * @param properties 配置
+     * @param metrics 指标出口
+     * @return 延后投递器
+     */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean(DeferredHandler.class)
+    @ConditionalOnProperty(prefix = "notifyx.quiet-hours", name = "enabled", havingValue = "true")
+    public InMemoryDeferredHandler notifyxDeferredHandler(NotifyxProperties properties, NotifyMetrics metrics) {
+        return new InMemoryDeferredHandler(
+                new InMemoryDeferredHandler.Config(properties.getQuietHours().getMaxDeferred()), metrics);
     }
 
     /**
@@ -458,6 +495,8 @@ public class NotifyxAutoConfiguration {
      * @param taskExecutor 执行器
      * @param channels 渠道
      * @param properties 配置
+     * @param aggregator 聚合器
+     * @param deferredHandlers 延后投递器，可缺省
      * @return 生命周期
      */
     @Bean
@@ -465,9 +504,12 @@ public class NotifyxAutoConfiguration {
     public NotifyxLifecycle notifyxLifecycle(NotifyTaskExecutor taskExecutor,
                                              ObjectProvider<NotifyChannel> channels,
                                              NotifyxProperties properties,
-                                             EventAggregator aggregator) {
+                                             EventAggregator aggregator,
+                                             ObjectProvider<DeferredHandler> deferredHandlers) {
+        DeferredHandler deferredHandler = deferredHandlers.getIfAvailable();
+        AutoCloseable closeable = deferredHandler instanceof AutoCloseable closeableHandler ? closeableHandler : null;
         return new NotifyxLifecycle(taskExecutor, channels.orderedStream().toList(),
-                properties.getAsync().getShutdownAwait(), aggregator);
+                properties.getAsync().getShutdownAwait(), aggregator, closeable);
     }
 
     /**
@@ -483,6 +525,7 @@ public class NotifyxAutoConfiguration {
      * @param auditRecorder 审计器
      * @param masker 脱敏器
      * @param taskExecutor 执行器
+     * @param deferredHandlers 延后投递器，可缺省
      * @return 诊断器
      */
     @Bean
@@ -496,9 +539,11 @@ public class NotifyxAutoConfiguration {
                                                  FailureStore failureStore,
                                                  AuditRecorder auditRecorder,
                                                  Masker masker,
-                                                 NotifyTaskExecutor taskExecutor) {
+                                                 NotifyTaskExecutor taskExecutor,
+                                                 ObjectProvider<DeferredHandler> deferredHandlers) {
         return new NotifyxDiagnostics(properties, channels.orderedStream().toList(), templateEngine, templates,
-                dedupeStore, rateLimiter, failureStore, auditRecorder, masker, taskExecutor);
+                dedupeStore, rateLimiter, failureStore, auditRecorder, masker, taskExecutor,
+                deferredHandlers.getIfAvailable());
     }
 
     /**

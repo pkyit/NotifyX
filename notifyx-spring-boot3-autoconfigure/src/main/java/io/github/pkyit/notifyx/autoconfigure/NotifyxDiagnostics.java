@@ -10,6 +10,7 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 
+import io.github.pkyit.notifyx.core.pipeline.DeferredHandler;
 import io.github.pkyit.notifyx.core.pipeline.MessageTemplate;
 import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
 import io.github.pkyit.notifyx.core.spi.AuditRecorder;
@@ -47,6 +48,7 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
     private final AuditRecorder auditRecorder;
     private final Masker masker;
     private final NotifyTaskExecutor taskExecutor;
+    private final DeferredHandler deferredHandler;
 
     /**
      * 构造诊断器。
@@ -66,6 +68,30 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
                               TemplateEngine templateEngine, Map<String, MessageTemplate> templates,
                               DedupeStore dedupeStore, RateLimiter rateLimiter, FailureStore failureStore,
                               AuditRecorder auditRecorder, Masker masker, NotifyTaskExecutor taskExecutor) {
+        this(properties, channels, templateEngine, templates, dedupeStore, rateLimiter, failureStore,
+                auditRecorder, masker, taskExecutor, null);
+    }
+
+    /**
+     * 构造诊断器。
+     *
+     * @param properties 配置
+     * @param channels 渠道
+     * @param templateEngine 模板引擎
+     * @param templates 模板表
+     * @param dedupeStore 去重存储
+     * @param rateLimiter 限流器
+     * @param failureStore 失败存储
+     * @param auditRecorder 审计器
+     * @param masker 脱敏器
+     * @param taskExecutor 执行器
+     * @param deferredHandler 延后投递器，可为 null
+     */
+    public NotifyxDiagnostics(NotifyxProperties properties, List<NotifyChannel> channels,
+                              TemplateEngine templateEngine, Map<String, MessageTemplate> templates,
+                              DedupeStore dedupeStore, RateLimiter rateLimiter, FailureStore failureStore,
+                              AuditRecorder auditRecorder, Masker masker, NotifyTaskExecutor taskExecutor,
+                              DeferredHandler deferredHandler) {
         this.properties = properties;
         this.channels = List.copyOf(channels);
         this.templateEngine = templateEngine;
@@ -76,6 +102,7 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         this.auditRecorder = auditRecorder;
         this.masker = masker;
         this.taskExecutor = taskExecutor;
+        this.deferredHandler = deferredHandler;
     }
 
     /**
@@ -204,9 +231,7 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
 
     private void appendWarnings(StringBuilder builder) {
         builder.append("│ ⚠ 降级与告警\n");
-        if (!properties.getQuietHours().isEnabled()) {
-            builder.append("│   · 免打扰未启用，夜间告警会正常发送\n");
-        }
+        appendQuietHours(builder);
         if (properties.getGlobalMute().isEnabled()) {
             builder.append("│   · 全局静默已开启：所有通知被丢弃\n");
         }
@@ -229,6 +254,27 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
             builder.append("│   · 升级未启用：高频故障不会自动切到更高触达渠道\n");
         }
         appendConfigMismatchWarnings(builder);
+    }
+
+    private void appendQuietHours(StringBuilder builder) {
+        NotifyxProperties.QuietHours quietHours = properties.getQuietHours();
+        if (!quietHours.isEnabled()) {
+            builder.append("│   · 免打扰未启用，夜间告警会正常发送\n");
+            return;
+        }
+        String window = quietHours.getFrom() + "-" + quietHours.getTo() + "（" + quietHours.getTimezone() + "）";
+        if (!quietHours.isDefer()) {
+            builder.append("│   · 免打扰 ").append(window).append("：defer=false，命中事件直接丢弃（审计留痕）\n");
+            return;
+        }
+        if (deferredHandler == null) {
+            builder.append("│   · ⚠ 免打扰 ").append(window)
+                    .append("：defer=true 但没有 DeferredHandler 装配，命中事件将被丢弃（审计留痕）\n");
+            return;
+        }
+        builder.append("│   · 免打扰 ").append(window).append("：命中事件延后到窗口结束再发（")
+                .append(simpleName(deferredHandler)).append("，容量 ")
+                .append(quietHours.getMaxDeferred()).append("，T0 内存、重启丢失）\n");
     }
 
     private void appendConfigMismatchWarnings(StringBuilder builder) {
