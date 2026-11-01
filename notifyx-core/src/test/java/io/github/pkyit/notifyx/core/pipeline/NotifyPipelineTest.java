@@ -3,6 +3,10 @@ package io.github.pkyit.notifyx.core.pipeline;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -16,6 +20,7 @@ import io.github.pkyit.notifyx.core.model.NotifyEvent;
 import io.github.pkyit.notifyx.core.model.SendResult;
 import io.github.pkyit.notifyx.core.pipeline.filter.DedupeFilter;
 import io.github.pkyit.notifyx.core.pipeline.filter.GlobalRateLimitFilter;
+import io.github.pkyit.notifyx.core.pipeline.filter.QuietHoursFilter;
 import io.github.pkyit.notifyx.core.pipeline.filter.SceneRoutingFilter;
 import io.github.pkyit.notifyx.core.spi.AuditRecord;
 import io.github.pkyit.notifyx.core.spi.AuditRecorder;
@@ -110,6 +115,114 @@ class NotifyPipelineTest {
         assertThat(channel.receivers).isEmpty();
         assertThat(audit.records).anyMatch(record -> "SUPPRESSED".equals(record.status()));
         assertThat(audit.records.get(0).attempts()).isZero();
+    }
+
+    @Test
+    @DisplayName("免打扰命中时事件交给 DeferredHandler 延后，不投递也不丢弃")
+    void quietHoursDeferHandsEventToDeferredHandler() {
+        CapturingDeferredHandler deferred = new CapturingDeferredHandler();
+        NotifyPipeline pipeline = deferredPipeline(deferred);
+
+        boolean accepted = pipeline.handle(NotifyEvent.builder("SCENE_A").level(Level.ERROR).build());
+
+        assertThat(accepted).isTrue();
+        assertThat(channel.receivers).isEmpty();
+        assertThat(deferred.events).hasSize(1);
+        assertThat(deferred.untils.get(0)).isAfter(Instant.now());
+        assertThat(audit.records).anyMatch(record ->
+                "SUPPRESSED".equals(record.status()) && "deferred".equals(record.errorMsg()));
+    }
+
+    @Test
+    @DisplayName("自定义 DeferredHandler 抛异常时退化为抑制，并保留审计")
+    void customHandlerFailureFallsBackToAudit() {
+        DeferredHandler broken = (event, until) -> {
+            throw new IllegalStateException("boom");
+        };
+        NotifyPipeline pipeline = deferredPipeline(broken);
+
+        boolean accepted = pipeline.handle(NotifyEvent.builder("SCENE_A").level(Level.ERROR).build());
+
+        assertThat(accepted).isFalse();
+        assertThat(channel.receivers).isEmpty();
+        assertThat(audit.records).anyMatch(record ->
+                "SUPPRESSED".equals(record.status()) && "deferred-error".equals(record.errorMsg()));
+    }
+
+    /**
+     * 构造带免打扰过滤器与指定延后处理器的管线。
+     */
+    private NotifyPipeline deferredPipeline(DeferredHandler deferredHandler) {
+        return NotifyPipeline.builder()
+                .sceneRegistry(SceneRegistry.of(
+                        Map.of("SCENE_A", SceneConfig.builder("SCENE_A").channels(List.of("recording")).build()),
+                        SceneRegistry.emptyDefaults()))
+                .filters(List.of(quietHoursCoveringNow(true)))
+                .channelRegistry(ChannelRegistry.of(List.of(channel)))
+                .templateEngine(new SimpleTemplateEngine())
+                .templates(Map.of("default", new MessageTemplate("default", "t", "${content}")))
+                .auditRecorder(audit)
+                .deferredHandler(deferredHandler)
+                .build();
+    }
+
+    @Test
+    @DisplayName("免打扰命中但没有 DeferredHandler 时退化为抑制：返回 false 并留下审计线索")
+    void quietHoursDeferWithoutHandlerDegradesToSuppression() {
+        NotifyPipeline pipeline = pipeline(List.of(quietHoursCoveringNow(true)),
+                SceneConfig.builder("SCENE_A").channels(List.of("recording")).build());
+
+        boolean accepted = pipeline.handle(NotifyEvent.builder("SCENE_A").level(Level.ERROR).build());
+
+        assertThat(accepted).isFalse();
+        assertThat(channel.receivers).isEmpty();
+        assertThat(audit.records).anyMatch(record ->
+                "SUPPRESSED".equals(record.status()) && "deferred-unsupported".equals(record.errorMsg()));
+    }
+
+    @Test
+    @DisplayName("defer=false 时免打扰命中直接丢弃")
+    void quietHoursDropWhenDeferDisabled() {
+        NotifyPipeline pipeline = pipeline(List.of(quietHoursCoveringNow(false)),
+                SceneConfig.builder("SCENE_A").channels(List.of("recording")).build());
+
+        boolean accepted = pipeline.handle(NotifyEvent.builder("SCENE_A").level(Level.ERROR).build());
+
+        assertThat(accepted).isFalse();
+        assertThat(channel.receivers).isEmpty();
+        assertThat(audit.records).anyMatch(record ->
+                "SUPPRESSED".equals(record.status()) && "quiet-hours-drop".equals(record.errorMsg()));
+    }
+
+    @Test
+    @DisplayName("T6：CRITICAL 直通免打扰，照常投递")
+    void criticalBypassesQuietHours() {
+        NotifyPipeline pipeline = pipeline(List.of(quietHoursCoveringNow(true)),
+                SceneConfig.builder("SCENE_A").channels(List.of("recording")).build());
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A").level(Level.CRITICAL).build());
+
+        assertThat(channel.receivers).hasSize(1);
+    }
+
+    /**
+     * 构造一个「当前时刻必然落在窗口内」的免打扰过滤器：from=now-1h，to=now+1h（UTC）。
+     */
+    private static QuietHoursFilter quietHoursCoveringNow(boolean defer) {
+        LocalTime now = LocalTime.now(ZoneOffset.UTC);
+        return new QuietHoursFilter(now.minusHours(1), now.plusHours(1), ZoneId.of("UTC"), defer, true);
+    }
+
+    private static final class CapturingDeferredHandler implements DeferredHandler {
+
+        private final List<NotifyEvent> events = new CopyOnWriteArrayList<>();
+        private final List<Instant> untils = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void defer(NotifyEvent event, Instant until) {
+            events.add(event);
+            untils.add(until);
+        }
     }
 
     @Test
