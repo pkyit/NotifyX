@@ -7,6 +7,20 @@
 - 当前交付状态看 `.memory/STATE.md`。当前范围是设计书 P0/P1 SDK；Redis、JDBC、MQ、Admin、IM 渠道属于 P2+，未经明确要求不要自行实现。
 - 修改对外行为或配置前，先查 `README.md`、`docs/design.md` 和 `.memory/decisions.md`，避免推翻既有 ADR / D-NNN。
 
+## 项目技能（.skills）
+
+`.skills/` 下的技能是本仓库的**强制规范**，AI 助手与协作者在触发对应场景时必须加载并遵循，不得绕过：
+
+| 技能 | 路径 | 强制使用场景 |
+| --- | --- | --- |
+| Git 提交标准 | `.skills/skills-git-commit-standard/SKILL.md` | 任何 `git add / commit / push` 之前 |
+| NotifyX Git 工作流程 | `.skills/skills-notifyx-git-workflow/SKILL.md` | 推送代码、合并分支、升级版本号、发布 |
+| K8s Manifest 生成 | `.skills/skills-k8s-manifest-generator/SKILL.md` | 生成或修改 Kubernetes YAML |
+| Linux Bash | `.skills/skillslinux-bash/SKILL.md` | 编写或调试 bash 脚本（注意本机为 PowerShell，勿混用语法） |
+
+- 技能文件与本文件冲突时，先在对话中提出，不得静默偏离。
+- 新增 / 修改 `.skills/` 技能时，必须同步更新本表与 `CLAUDE.md`。
+
 ## 常用命令
 
 ```bash
