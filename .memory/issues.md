@@ -528,7 +528,7 @@
   死信队列 `{retry.exchange}.dead` 并绑定 routing key `dead`；重投时复制原消息头（保留 `messageId`）。
 
 ## ISSUE-054 聚合摘要 sink 直连管线，阻塞单线程调度器
-- **状态**：OPEN（2026-11-03 代码质量评估发现，N-1）
+- **状态**：CLOSED（iter-65）
 - **现象**：`NotifyxAutoConfiguration.notifyxNotifyKit` 以 `aggregator.sink(pipeline::handle)` 装配；
   T0 `Aggregator` 与 T1 `RedisAggregator` 的窗口 flush 都在单线程调度器上同步执行完整管线
   （含重试 `Thread.sleep` 退避），一条慢/失败摘要会阻塞该实例所有其他窗口的摘要。
@@ -536,9 +536,11 @@
   同文件 387-388 行 iter-59 已为 `InMemoryDeferredHandler` 修过同类问题并留注释，聚合器被遗漏。
 - **影响**：聚合开启时摘要时效性被最慢渠道绑架，违背「异步路径有界」红线。
 - **建议**：聚合 sink 改经 `taskExecutor.execute()`，与 defer 重放同构。
+- **关闭方式**：iter-65，聚合 sink 与 defer 重放同构改经有界 `taskExecutor.execute`，
+  `RejectedExecutionException` 走既有丢弃日志；不再阻塞单线程调度器。
 
 ## ISSUE-055 补偿重投自我复制失败记录 + 去重黑洞
-- **状态**：OPEN（2026-11-03 代码质量评估发现，N-2）
+- **状态**：CLOSED（iter-65）
 - **现象**：`FailureCompensationRunner.deliver → deliverSync → pipeline.handle` 完整重入管线：
   1. 重投失败时 `persistFailure` 用同一 `eventId` 再落一条记录；`InMemoryFailureStore.save`
      无 recordId 唯一性 → 重复记录逐轮放大（JDBC 退化为主键冲突 warn，LocalFile 产生跨分片双文件）；
@@ -549,42 +551,55 @@
 - **影响**：补偿是「通知不丢」的最后防线，该缺陷造成重复投递放大与静默误杀。
 - **建议**：补偿重投豁免 dedupe/rate-limit；补偿路径失败不再 `persistFailure`；
   save 增加 recordId 覆盖语义。涉及管线入口契约，需同步 design.md §9.9 并评估 D-NNN。
+- **关闭方式**：iter-65，新增 `NotifyEvent.replay` transient 标记 + `NotifyEnvelope.toReplayEvent()`；
+  DedupeFilter/SceneRateLimitFilter/GlobalRateLimitFilter 对 replay 直接放行；persistFailure 对 replay 短路；
+  FailureCompensationRunner 改用 `toReplayEvent`。测试：`FailurePersistenceTest.shouldNotPersistReplayFailure`、
+  `NotifyPipelineTest.replayBypassesDedupe`、`FailureCompensationRunnerTest` 断言 `isReplay`。
+  契约见 design.md §9.9 与 D-032；`save` 的 recordId 覆盖语义未采纳（见 D-032 影响）。
 
 ## ISSUE-056 EmailChannel 空收件人 NPE 重试风暴
-- **状态**：OPEN（2026-11-03 代码质量评估发现，N-3）
+- **状态**：CLOSED（iter-65）
 - **现象**：场景未配接收人时管线以 `receiver=null` 调用 `sendOne`，`InternetAddress.parse(null)`
   抛 NPE，落入管线 `RuntimeException` 分支按可重试失败处理：重试 N 次 + 记熔断失败 + 落盘补偿。
 - **证据**：`EmailChannel.java:94`；`NotifyPipeline.java:225-226,343-355`。
 - **影响**：静态配置错误转化为运行期重试风暴与熔断污染，违背「参数类错误不可盲目重试」红线。
 - **建议**：`EmailChannel.send` 校验空 receiver 抛 `ChannelProtocolException`（不可重试）。
+- **关闭方式**：iter-65，`EmailChannel.send` 前置校验空/空白 receiver 抛 `ChannelProtocolException`。
+  测试：`EmailChannelTest.shouldRejectBlankReceiver`（断言不发起投递）。
 
 ## ISSUE-057 EmailChannel 自定义 Message-ID 被 JavaMail 静默覆盖
-- **状态**：OPEN（2026-11-03 代码质量评估发现，N-4）
+- **状态**：CLOSED（iter-65）
 - **现象**：发送前 `setHeader("Message-ID", ...)`，但 `Transport.send → saveChanges → updateHeaders`
   会无条件重新生成 Message-ID，幂等头静默失效；静态 mock `Transport.send` 的契约测试覆盖不到。
 - **证据**：`EmailChannel.java:98-101`；Jakarta Mail `MimeMessage.updateMessageID()` 语义；
   与 ISSUE-016 同属「静态 mock 覆盖不到协议交互」盲区。
 - **影响**：按 Message-ID 幂等的下游会把重发当新邮件；`X-Notifyx-Event-Id` 仍在，可作替代键。
 - **建议**：子类化 `MimeMessage` 重写 `updateMessageID()`；或文档明示幂等以 `X-Notifyx-Event-Id` 为准。
+- **关闭方式**：iter-65，子类化 `MimeMessage`（`MessageIdPreservingMimeMessage`）重写 `updateMessageID`
+  保留自定义值。测试：`EmailChannelTest.shouldPreserveMessageIdAfterSaveChanges`（触发 `saveChanges` 验证）。
 
 ## ISSUE-058 T0/T1 聚合 level 语义不一致
-- **状态**：OPEN（2026-11-03 代码质量评估发现，N-5）
+- **状态**：CLOSED（iter-65）
 - **现象**：T0 `Aggregator` 窗口内取最高级别（`level.atLeast`）；T1 `RedisAggregator` 用
   `HSETNX level` 第一个事件定死。先 WARN 后 ERROR 的故障中，T1 摘要永远停在 WARN。
 - **证据**：`Aggregator.java:93` vs `RedisAggregator.java:50`（RECORD Lua 脚本）。
 - **影响**：同一故障在不同能力梯度下摘要级别不同，违反「梯度只换存储不换语义」原则。
 - **建议**：Lua 改为按级别序比较后写入。
+- **关闭方式**：iter-65，RECORD Lua 脚本改为按 INFO<WARN<ERROR<CRITICAL 序比较后 `HSET level`
+  （未知级别按 WARN 兜底）。Lua 逻辑由 `RedisStoresLiveTest` 覆盖（需真实 Redis 环境）。
 
 ## ISSUE-059 Webhook 响应体读取无大小限制
-- **状态**：OPEN（2026-11-03 代码质量评估发现，N-6）
+- **状态**：CLOSED（iter-65）
 - **现象**：`BodyHandlers.ofString()` 先把整个响应体读进内存再 `truncate(1KB)`；readTimeout
   只约束字节间隔不约束总量，慢速大 body 可长时间占用发送线程。
 - **证据**：`WebhookChannel.java:104,260-265`。
 - **影响**：恶意/故障接收端返回超大 body 可造成堆压力甚至 OOM。
 - **建议**：改 `BodyHandlers.ofInputStream()` 限量读取（如 64KB）。
+- **关闭方式**：iter-65，改 `BodyHandlers.ofInputStream` + `readBody`（64KB 上限）后再 classify；
+  现有 `WebhookChannelTest` 覆盖该读取与截断路径。
 
 ## ISSUE-060 低风险缺陷清单（2026-11-03 评估，N-7~N-14）
-- **状态**：OPEN（合并登记，详见 `docs/code-quality-review-2026-11-03.md` §5）
+- **状态**：OPEN（iter-65 处理 N-7/N-13，N-11 复核为误报；N-8/N-9/N-10/N-12/N-14 遗留）
 - **清单与证据**：
   1. N-7 `RetryPolicy.java:78`：退避乘法 long 溢出（base>~106 天时退避变 1ms）；
   2. N-8 `PriorityNotifyExecutor.java:76-109`：队列满替换 check-then-remove 非原子 + O(n) 扫描；
@@ -596,3 +611,10 @@
   8. N-14 `Aggregator.java:132-142`：flush/record 竞态窗口边界丢 1 条计数。
 - **影响**：单项影响均小或有界，合并为一批修复。
 - **建议**：随 1.0.2 批次处理，逐项补单测。
+- **iter-65 处理**：
+  - N-7 已修复：`RetryPolicy.delayAfter` 改饱和左移 `saturatingLeftShift`，测试
+    `RetryPolicyTest.shouldSaturateNotOverflowOnHugeBase`；
+  - N-13 已修复：`notifyxNotifyKit` 注入并复用 `SceneRegistry` Bean；
+  - N-11 复核为误报：当前 `i + 4 < raw.length()` 已正确对应 `substring(i+1, i+5)` 的合法边界
+    （`i` 在 switch 前已递增指向 `u`），改为 `<=` 反而会在串尾转义时 `substring` 越界，维持原实现不变；
+  - N-8/N-9/N-10/N-12/N-14 遗留：属需重构或文档化性质（详见报告 §5.2），并入后续批次处理。

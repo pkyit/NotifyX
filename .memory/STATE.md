@@ -1,10 +1,10 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-11-02 10:40（iter-61/62：RabbitMQ DLX + 多级 TTL 重试、consumer 死信重试与拓扑）
+> 更新时间：2026-11-03（iter-65：11-03 代码质量报告缺陷修复）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
-> 构建基线：`mvn -B clean install` 通过（Spotless/Checkstyle/JaCoCo 全绿），
-> 17 个模块，334 测试执行 + 13 live 跳过（共 347 用例）；`mvn -Prelease -Dgpg.skip=true package`
+> 构建基线：`mvn -B -ntp clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），17 个模块；
+> `mvn -Prelease -Dgpg.skip=true package`
 > 需在普通终端复验（本沙箱 javadoc 目标目录不可写，见 `env.md` §13）。
 
 ## 1. 一句话现状
@@ -386,3 +386,28 @@ sms4j 适配。
   Spotless/Checkstyle/JaCoCo 全绿；consumer 28 用例、bus-rabbitmq 6 用例。
 - **剩余**：真实 broker 的 DLX 端到端冒烟（live）；Kafka lag 真实集群校准（含 SSL bundle 注入）；
   §5 的待用户决策项（A02/A03/A04/A07）。
+
+## 17. 11-03 代码质量报告缺陷修复（iter-65，2026-11-03）
+
+- **触发**：`docs/code-quality-review-2026-11-03.md`（88/100）产出 N-1~N-14 缺陷，据实分析、评估并落实。
+- **修复 6 个中高风险缺陷（N-1~N-6）+ 2 个低风险项（N-7/N-13）**：
+  - N-1：聚合摘要 sink 改经有界执行器，与 defer 重放同构；
+  - N-2（契约变更 D-032）：新增 `NotifyEvent.replay`（transient）+ `NotifyEnvelope.toReplayEvent()`，
+    重投豁免去重/限流且失败不二次落盘，根治补偿自我复制与去重黑洞；
+  - N-3：`EmailChannel.send` 空收件人抛 `ChannelProtocolException`（不可重试）；
+  - N-4：子类化 `MimeMessage` 重写 `updateMessageID`，保留自定义 Message-ID 幂等键；
+  - N-5：Redis 聚合 RECORD Lua 改按级别序比较后 `HSET level`（与 T0 语义一致）；
+  - N-6：Webhook 响应体改 `BodyHandlers.ofInputStream` 限量读取（64KB 上限）；
+  - N-7：`RetryPolicy.delayAfter` 改饱和左移；N-13：`notifyxNotifyKit` 复用 `SceneRegistry` Bean。
+- **测试**：新增 5 用例
+  （`shouldRejectBlankReceiver`、`shouldPreserveMessageIdAfterSaveChanges`、
+  `shouldSaturateNotOverflowOnHugeBase`、`shouldNotPersistReplayFailure`、`replayBypassesDedupe`），
+  并增强 `FailureCompensationRunnerTest` 断言 `isReplay`。
+- **验证**：`mvn -B -ntp clean verify` → **BUILD SUCCESS**（17/17 模块，Spotless/Checkstyle/JaCoCo 全绿）。
+- **复核结论（未采纳/误报）**：
+  - N-11 复核为误报：`unescape` 当前 `i + 4 < raw.length()` 已正确对应 `substring(i+1, i+5)` 合法边界，
+    改为 `<=` 反而会在串尾转义时越界；
+  - `InMemoryFailureStore.save` 的 recordId 覆盖语义未采纳（会丢多渠道失败记录，见 D-032）。
+- **遗留（见 ISSUE-060）**：N-8/N-9/N-10/N-12/N-14（需重构或文档化）；ISSUE-039
+  （`dedupe.default-window` 不可达）为配置语义决策，待用户拍板。
+- **版本**：未改版本号（当前 1.0.2）；1.0.0 已发布，本修复并入后续 patch 版本发布决策。

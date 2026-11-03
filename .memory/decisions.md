@@ -516,3 +516,23 @@
 - **影响**：consumer fat jar 增加 micrometer-core；未提供 `MeterRegistry` 的部署看不到该指标（只记 debug）。
   Kafka 采样每次抓取最多 3 次 Admin 调用（describeTopics / listOffsets / listConsumerGroupOffsets）。
 - **复审条件**：接入 Prometheus 实测抓取超时压力时，可改为按 TTL 缓存采样；支持 RocketMQ 时新增 transport 分支。
+
+## D-032 补偿重投用 `NotifyEvent.replay` 标记豁免去重/限流且不二次落盘
+
+- **日期**：2026-11-03（iter-65）
+- **状态**：生效
+- **背景**：§9.9 补偿通过 `deliverSync` 完整重入管线，两种副作用叠加：① 重投失败时
+  `persistFailure` 以同一 eventId 再落盘，失败记录逐轮自我复制；② 重投事件再过
+  `DedupeFilter` 被判 DEDUPED → `handle` 返回 false → 补偿误判失败并转 DEAD（「该补偿成功的
+  通知被自己的去重器杀死」）。
+- **决策**：给 `NotifyEvent` 增加 `transient boolean replay`（不进序列化，向后兼容）；
+  `NotifyEnvelope.toReplayEvent()` 还原重投事件并置该标记；`DedupeFilter` /
+  `SceneRateLimitFilter` / `GlobalRateLimitFilter` 对 replay 事件直接放行（CRITICAL 旁路与
+  安静时间语义保留）；`NotifyPipeline.persistFailure()` 对 replay 事件短路不落盘。补偿状态机的
+  失败处理仍由 `FailureCompensationRunner` 的 requeue/DEAD 承担，不依赖管线二次落盘。
+- **理由**：去重/限流对补偿重投无意义（重投就是要再发一次），落盘会自我复制。用 transient 字段
+  而非 tags，避免重投标记被序列化进 envelope、进而污染重新入队后的语义；SPI 改动微小且向后兼容。
+- **影响**：`InMemoryFailureStore.save` 的 recordId 覆盖语义**未采纳**——同一 eventId 多渠道同时失败
+  本应各自保留一条补偿记录，覆盖会丢失渠道维度；根本问题已由「重投不落盘」根治，不引入新的覆盖副作用。
+- **复审条件**：若未来补偿需按 channel 维度重放（当前 recordId=eventId 无法区分渠道），
+  重新审视 recordId 唯一性策略。
