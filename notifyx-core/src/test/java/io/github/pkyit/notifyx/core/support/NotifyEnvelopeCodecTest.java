@@ -101,6 +101,20 @@ class NotifyEnvelopeCodecTest {
     }
 
     @Test
+    @DisplayName("T23：同版本报文中多出的未知字段被忽略，正常解析")
+    void shouldIgnoreUnknownFields() {
+        String json = NotifyEnvelopeCodec.toJson(NotifyEnvelope.of(
+                NotifyEvent.builder("SCENE_A").build(), "k", null, null, "i", 0, 1L));
+        String withUnknown = json.substring(0, json.length() - 1)
+                + ",\"futureField\":\"x\",\"futureList\":[1,2]}";
+
+        NotifyEnvelope decoded = NotifyEnvelopeCodec.fromJson(withUnknown);
+
+        assertThat(decoded.scene()).isEqualTo("SCENE_A");
+        assertThat(decoded.dedupeKey()).isEqualTo("k");
+    }
+
+    @Test
     @DisplayName("非对象 / 非法 JSON 抛 IllegalArgumentException")
     void shouldRejectMalformed() {
         assertThatThrownBy(() -> NotifyEnvelopeCodec.fromJson("[]"))

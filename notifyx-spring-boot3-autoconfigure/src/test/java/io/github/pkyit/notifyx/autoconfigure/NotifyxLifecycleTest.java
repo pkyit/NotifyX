@@ -95,6 +95,24 @@ class NotifyxLifecycleTest {
         assertThat(NotifyxLifecycle.PHASE).isLessThan(NotifyxLifecycle.DEFAULT_PHASE);
     }
 
+    @Test
+    @DisplayName("T16：关闭时队列 100 个任务全部排空发出，无静默丢失")
+    void shouldDrainAllQueuedTasksOnShutdown() {
+        PriorityNotifyExecutor executor = new PriorityNotifyExecutor(1, 1, 128, Duration.ofSeconds(1),
+                "lifecycle-drain-", NotifyMetrics.noop(), Duration.ofSeconds(5));
+        AtomicInteger executed = new AtomicInteger();
+        for (int i = 0; i < 100; i++) {
+            executor.execute(io.github.pkyit.notifyx.core.model.Level.ERROR, "k" + i, executed::incrementAndGet);
+        }
+        NotifyxLifecycle lifecycle = new NotifyxLifecycle(executor, List.of(channel), Duration.ofSeconds(5));
+        lifecycle.start();
+
+        lifecycle.stop();
+
+        assertThat(executed).hasValue(100);
+        assertThat(channel.closed).isTrue();
+    }
+
     private static PriorityNotifyExecutor executor() {
         return new PriorityNotifyExecutor(1, 1, 32, Duration.ofSeconds(1), "lifecycle-test-",
                 NotifyMetrics.noop(), Duration.ofSeconds(5));

@@ -153,6 +153,32 @@ class PriorityNotifyExecutorTest {
         assertThat(metrics.discardedReasons).contains("shutdown");
     }
 
+    @Test
+    @DisplayName("T12：队列满时业务线程不阻塞等待（绝不 CallerRuns），立即丢弃返回")
+    void shouldNotBlockCallerWhenQueueFull() throws Exception {
+        executor = newExecutor(1, 2);
+        CountDownLatch blockerStarted = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        executor.execute(Level.INFO, "blocker", () -> {
+            blockerStarted.countDown();
+            await(release);
+            executed.add("blocker");
+        });
+        assertThat(blockerStarted.await(2, TimeUnit.SECONDS)).isTrue();
+
+        long started = System.nanoTime();
+        for (int i = 0; i < 1000; i++) {
+            String key = "flood-" + i;
+            executor.execute(Level.INFO, key, () -> executed.add(key));
+        }
+        long elapsedMs = java.time.Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+        assertThat(elapsedMs).isLessThan(1000);
+        assertThat(executed).isEmpty();
+        assertThat(metrics.discardedReasons).isNotEmpty();
+        release.countDown();
+    }
+
     private PriorityNotifyExecutor newExecutor(int corePoolSize, int capacity) {
         return new PriorityNotifyExecutor(corePoolSize, corePoolSize, capacity, Duration.ofSeconds(5),
                 "test-executor-", metrics, Duration.ofSeconds(2));

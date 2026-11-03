@@ -187,6 +187,17 @@ class WebhookChannelTest {
     }
 
     @Test
+    @DisplayName("T20：SSRF 防护——指向云元数据地址 169.254.169.254 被白名单拦截")
+    void shouldBlockMetadataAddress() {
+        properties.setAllowedHosts(List.of("hooks.example.com"));
+        properties.setUrl("http://169.254.169.254/latest/meta-data/iam");
+
+        assertThatThrownBy(() -> new WebhookChannel(properties).send(context()))
+                .isInstanceOf(ChannelProtocolException.class)
+                .hasMessageContaining("allow-list");
+    }
+
+    @Test
     @DisplayName("url 为空 → 拒绝发送")
     void shouldRejectBlankUrl() {
         properties.setUrl("  ");

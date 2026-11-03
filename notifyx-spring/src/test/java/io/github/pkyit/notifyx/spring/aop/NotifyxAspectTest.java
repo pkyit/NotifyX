@@ -149,6 +149,13 @@ class NotifyxAspectTest {
         }
     }
 
+    @Test
+    @DisplayName("T9：SpEL 引用不存在的字段时降级放行，不告警、不影响业务返回")
+    void shouldDegradeWhenSpelFieldMissing() {
+        assertThat(service.fieldExpr("x")).isEqualTo("x");
+        assertThat(KIT.events).isEmpty();
+    }
+
     @Configuration
     @EnableAspectJAutoProxy(proxyTargetClass = true)
     static class PermissiveConfig {
@@ -233,6 +240,11 @@ class NotifyxAspectTest {
 
         @NotifyOn(scene = "METHOD", when = "#r.toString() != ''")
         public String methodExpr(String orderNo) {
+            return orderNo;
+        }
+
+        @NotifyOn(scene = "FIELD_MISSING", when = "#r.nonExistField != null")
+        public String fieldExpr(String orderNo) {
             return orderNo;
         }
     }

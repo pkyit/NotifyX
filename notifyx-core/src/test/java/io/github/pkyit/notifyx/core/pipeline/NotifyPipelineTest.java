@@ -261,14 +261,23 @@ class NotifyPipelineTest {
 
     private static final class RecordingChannel implements NotifyChannel {
 
+        private final String channelName;
         private final List<String> receivers = new CopyOnWriteArrayList<>();
         private final List<NotifyContext> contexts = new CopyOnWriteArrayList<>();
         private final java.util.concurrent.atomic.AtomicBoolean failFirst = new java.util.concurrent.atomic.AtomicBoolean();
         private final java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
 
+        RecordingChannel() {
+            this("recording");
+        }
+
+        RecordingChannel(String channelName) {
+            this.channelName = channelName;
+        }
+
         @Override
         public String name() {
-            return "recording";
+            return channelName;
         }
 
         @Override
@@ -291,5 +300,28 @@ class NotifyPipelineTest {
         public void record(AuditRecord record) {
             records.add(record);
         }
+    }
+
+    @Test
+    @DisplayName("T24：3 个接收人 × 2 个渠道 → 6 条成功审计记录")
+    void shouldFanOutAuditForEveryReceiverAndChannel() {
+        RecordingChannel second = new RecordingChannel("recording2");
+        NotifyPipeline pipeline = NotifyPipeline.builder()
+                .sceneRegistry(SceneRegistry.of(Map.of("SCENE_A",
+                        SceneConfig.builder("SCENE_A").channels(List.of("recording", "recording2")).build()),
+                        SceneRegistry.emptyDefaults()))
+                .channelRegistry(ChannelRegistry.of(List.of(channel, second)))
+                .templateEngine(new SimpleTemplateEngine())
+                .templates(Map.of("default", new MessageTemplate("default", "t", "${content}")))
+                .auditRecorder(audit)
+                .build();
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A")
+                .receivers(java.util.List.of("a@x.com", "b@x.com", "c@x.com"))
+                .build());
+
+        assertThat(channel.receivers).hasSize(3);
+        assertThat(second.receivers).hasSize(3);
+        assertThat(audit.records.stream().filter(record -> "SUCCESS".equals(record.status())).count()).isEqualTo(6);
     }
 }

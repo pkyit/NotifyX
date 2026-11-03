@@ -1,5 +1,6 @@
 package io.github.pkyit.notifyx.bus.rabbitmq;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -8,10 +9,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,6 +78,40 @@ class RabbitMqNotifyBusTest {
         doThrow(new IOException("down")).when(channel).basicPublish(anyString(), anyString(), any(), any(byte[].class));
 
         assertThatThrownBy(() -> bus.publish(envelope())).isInstanceOf(BusException.class);
+        bus.close();
+    }
+
+    @Test
+    @DisplayName("退避重试：主队列挂 DLX + 声明三级 TTL 重试队列与绑定")
+    void shouldDeclareRetryTopology() throws Exception {
+        RabbitMqBusProperties properties = new RabbitMqBusProperties();
+        properties.setQueue("notifyx-events");
+        properties.getRetry().setEnabled(true);
+        when(factory.newConnection()).thenReturn(connection);
+        when(connection.createChannel()).thenReturn(channel);
+        when(channel.isOpen()).thenReturn(true);
+        when(connection.isOpen()).thenReturn(true);
+        when(channel.queueDeclare(anyString(), anyBoolean(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(mock(AMQP.Queue.DeclareOk.class));
+        RabbitMqNotifyBus bus = new RabbitMqNotifyBus(properties, factory);
+
+        bus.publish(envelope());
+
+        ArgumentCaptor<Map<String, Object>> args = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<String> queueNames = ArgumentCaptor.forClass(String.class);
+        verify(channel, times(5)).queueDeclare(
+                queueNames.capture(), anyBoolean(), anyBoolean(), anyBoolean(), args.capture());
+        assertThat(args.getAllValues().get(0))
+                .containsEntry("x-dead-letter-exchange", "notifyx.retry")
+                .containsEntry("x-dead-letter-routing-key", "dead");
+        assertThat(args.getAllValues().get(1))
+                .containsEntry("x-message-ttl", 5_000L)
+                .containsEntry("x-dead-letter-exchange", "")
+                .containsEntry("x-dead-letter-routing-key", "notifyx-events");
+        assertThat(queueNames.getAllValues()).contains("notifyx.retry.dead");
+        verify(channel).exchangeDeclare(eq("notifyx.retry"), eq("direct"), eq(true));
+        verify(channel, times(4)).queueBind(anyString(), eq("notifyx.retry"), anyString());
+        verify(channel).queueBind("notifyx.retry.dead", "notifyx.retry", "dead");
         bus.close();
     }
 

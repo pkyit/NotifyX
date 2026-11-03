@@ -63,6 +63,24 @@ class FallbackStoreTest {
         assertThat(fallback.calls.get()).isEqualTo(3);
     }
 
+    @Test
+    @DisplayName("T14：熔断打开后不再触碰 Redis（降级告警只在熔断那一刻发生一次）")
+    void shouldNotRetryRedisWhileCircuitOpen() {
+        failingRateLimiter primary = new failingRateLimiter();
+        CountingRateLimiter fallback = new CountingRateLimiter();
+        FallbackRateLimiter limiter = new FallbackRateLimiter(primary, fallback, 2, Duration.ofSeconds(30));
+
+        limiter.tryAcquire("scene:A", 1, Duration.ofMinutes(1));
+        limiter.tryAcquire("scene:A", 1, Duration.ofMinutes(1));
+        assertThat(limiter.isDegraded()).isTrue();
+
+        for (int i = 0; i < 10; i++) {
+            limiter.tryAcquire("scene:A", 1, Duration.ofMinutes(1));
+        }
+
+        assertThat(primary.calls.get()).isEqualTo(2);
+    }
+
     private static final class failingDedupe implements DedupeStore {
 
         private final AtomicInteger calls = new AtomicInteger();

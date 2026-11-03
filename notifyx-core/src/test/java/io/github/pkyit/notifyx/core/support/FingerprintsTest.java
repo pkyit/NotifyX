@@ -81,4 +81,20 @@ class FingerprintsTest {
         String fingerprint = Fingerprints.of("SCENE_A", "biz", Map.of("k", "v"));
         assertThat(fingerprint).startsWith("sha256:").hasSize(7 + 64);
     }
+
+    @Test
+    @DisplayName("T2：params 序列化为 JSON 再反序列化后指纹保持不变")
+    void shouldSurviveJsonRoundTrip() {
+        Map<String, Object> original = new LinkedHashMap<>();
+        original.put("orderId", "SO20261021001");
+        original.put("count", 42);
+        original.put("nested", Map.of("k", "v"));
+        original.put("scores", List.of(1, 2, 3));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> restored = (Map<String, Object>) JsonCodec.read(JsonCodec.write(original));
+
+        assertThat(Fingerprints.of("ORDER_CREATE_FAIL", "SO20261021001", restored))
+                .isEqualTo(Fingerprints.of("ORDER_CREATE_FAIL", "SO20261021001", original));
+    }
 }
