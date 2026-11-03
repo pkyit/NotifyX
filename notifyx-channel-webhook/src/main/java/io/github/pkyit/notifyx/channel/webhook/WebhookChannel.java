@@ -1,6 +1,8 @@
 package io.github.pkyit.notifyx.channel.webhook;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -41,6 +43,9 @@ public class WebhookChannel implements NotifyChannel {
     public static final String NAME = "webhook";
 
     private static final String USER_AGENT = "NotifyX/1.0";
+
+    /** 响应体读取上限，超过部分丢弃（分类与截断只需头部信息），防止异常响应撑爆堆。 */
+    private static final int MAX_RESPONSE_BYTES = 64 * 1024;
 
     private static final Set<String> RESERVED_HEADERS = Set.of(
             "content-type", "user-agent", "host", "content-length", "connection", "transfer-encoding",
@@ -101,9 +106,13 @@ public class WebhookChannel implements NotifyChannel {
             throw new ChannelProtocolException(NAME, "invalid webhook request: " + ex.getMessage(), ex);
         }
         try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            Duration cost = Duration.ofNanos(System.nanoTime() - started);
-            return classify(response, cost);
+            HttpResponse<InputStream> response =
+                    client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream in = response.body()) {
+                Duration cost = Duration.ofNanos(System.nanoTime() - started);
+                String responseBody = readBody(in, MAX_RESPONSE_BYTES);
+                return classify(response.statusCode(), responseBody, cost);
+            }
         } catch (java.net.http.HttpTimeoutException ex) {
             throw new ChannelTimeoutException(NAME, ex);
         } catch (IOException ex) {
@@ -116,18 +125,29 @@ public class WebhookChannel implements NotifyChannel {
         }
     }
 
-    private SendResult classify(HttpResponse<String> response, Duration cost) throws ChannelException {
-        int status = response.statusCode();
+    private SendResult classify(int status, String body, Duration cost) throws ChannelException {
         if (properties.getExpectStatus().contains(status)) {
-            return SendResult.success(String.valueOf(status), truncate(response.body()), cost);
+            return SendResult.success(String.valueOf(status), truncate(body), cost);
         }
         if (status == 429) {
-            throw new ChannelRateLimitException(NAME, "webhook rate limited (429): " + response.body());
+            throw new ChannelRateLimitException(NAME, "webhook rate limited (429): " + truncate(body));
         }
         if (status >= 500) {
-            throw new ChannelException(NAME, "webhook server error " + status + ": " + truncate(response.body()));
+            throw new ChannelException(NAME, "webhook server error " + status + ": " + truncate(body));
         }
-        throw new ChannelProtocolException(NAME, "webhook rejected " + status + ": " + truncate(response.body()));
+        throw new ChannelProtocolException(NAME, "webhook rejected " + status + ": " + truncate(body));
+    }
+
+    private static String readBody(InputStream in, int maxBytes) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int total = 0;
+        int read;
+        while (total < maxBytes && (read = in.read(buffer, 0, Math.min(buffer.length, maxBytes - total))) != -1) {
+            out.write(buffer, 0, read);
+            total += read;
+        }
+        return out.toString(StandardCharsets.UTF_8);
     }
 
     private URI verifyUri(String rawUrl) throws ChannelProtocolException {
