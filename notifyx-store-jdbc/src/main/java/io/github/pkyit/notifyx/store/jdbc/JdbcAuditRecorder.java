@@ -29,7 +29,7 @@ public final class JdbcAuditRecorder implements AuditRecorder {
     private static final Logger log = LoggerFactory.getLogger(JdbcAuditRecorder.class);
 
     private static final String INSERT = """
-            insert into nx_audit (id, event_id, scene, level, biz_id, channel, receiver, status, error_msg,
+            insert into nx_audit (id, event_id, scene, event_level, biz_id, channel, receiver, status, error_msg,
                                   attempts, cost_ms, instance_id, trace_id, app_id, tenant, created_at, sent_at)
             values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;

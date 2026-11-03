@@ -3,7 +3,7 @@ create table nx_audit (
     id          bigint       not null primary key,
     event_id    varchar(64)  not null,
     scene       varchar(64),
-    level       varchar(16),
+    event_level varchar(16),
     biz_id      varchar(128),
     channel     varchar(32),
     receiver    varchar(256),

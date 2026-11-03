@@ -19,7 +19,8 @@ import org.slf4j.LoggerFactory;
  * <p>循环「查一批 id → 按 id 删除」，每批 {@code batchSize} 行，避免大事务锁表；
  * 调度由部署方负责（Spring {@code @Scheduled}、k8s CronJob 等），SDK 不内置后台线程。</p>
  *
- * <p>SQL 使用标准 {@code limit} 与 {@code in}，MySQL/H2/PostgreSQL 均适用；DM/Kingbase 待适配。</p>
+ * <p>SQL 使用标准 {@code limit} 与 {@code in}，MySQL/H2/PostgreSQL/DM/Kingbase/openGauss 均适用，
+ * 各库 DDL 见 {@code src/main/resources/sql}。</p>
  *
  * @since 1.0
  */
