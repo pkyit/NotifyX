@@ -48,6 +48,9 @@ public final class DedupeFilter implements EventFilter {
 
     @Override
     public FilterVerdict doFilter(FilterContext ctx) {
+        if (ctx.event().isReplay()) {
+            return FilterVerdict.pass();
+        }
         Duration window = effectiveWindow(ctx.silentWindow(), ctx.critical());
         if (window.isZero() || window.isNegative()) {
             return FilterVerdict.pass();

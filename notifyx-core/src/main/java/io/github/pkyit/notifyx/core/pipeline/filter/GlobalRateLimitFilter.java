@@ -48,7 +48,7 @@ public final class GlobalRateLimitFilter implements EventFilter {
 
     @Override
     public FilterVerdict doFilter(FilterContext ctx) {
-        if (ctx.critical() || limit <= 0) {
+        if (ctx.critical() || ctx.event().isReplay() || limit <= 0) {
             return FilterVerdict.pass();
         }
         boolean acquired = rateLimiter.tryAcquire("global", limit, window);

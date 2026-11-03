@@ -75,9 +75,19 @@ public final class RetryPolicy {
      */
     public Duration delayAfter(int attempt, NotifyChannel channel) {
         Duration base = channel == null ? baseDelay : channel.retryBackoff();
-        long exponential = base.toMillis() * (1L << Math.min(20, Math.max(0, attempt - 1)));
+        long exponential = saturatingLeftShift(base.toMillis(), Math.min(20, Math.max(0, attempt - 1)));
         long capped = Math.min(exponential, maxDelay.toMillis());
         double factor = 1.0 - jitter + jitter * RANDOM.nextDouble();
         return Duration.ofMillis(Math.max(1L, (long) (capped * factor)));
+    }
+
+    private static long saturatingLeftShift(long value, int shift) {
+        if (value <= 0 || shift <= 0) {
+            return value;
+        }
+        if (shift >= 63 - Long.numberOfLeadingZeros(value)) {
+            return Long.MAX_VALUE;
+        }
+        return value << shift;
     }
 }

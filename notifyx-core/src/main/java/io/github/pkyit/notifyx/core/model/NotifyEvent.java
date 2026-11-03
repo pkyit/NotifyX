@@ -55,6 +55,7 @@ public final class NotifyEvent implements java.io.Serializable {
 
     private final transient Runnable onSuccess;
     private final transient Consumer<Throwable> onError;
+    private final transient boolean replay;
 
     private NotifyEvent(Builder builder) {
         this.scene = requireScene(builder.scene);
@@ -71,6 +72,7 @@ public final class NotifyEvent implements java.io.Serializable {
         this.eventId = builder.eventId == null ? "evt_" + io.github.pkyit.notifyx.core.support.Ulid.next() : builder.eventId;
         this.onSuccess = builder.onSuccess;
         this.onError = builder.onError;
+        this.replay = builder.replay;
     }
 
     /**
@@ -182,6 +184,18 @@ public final class NotifyEvent implements java.io.Serializable {
      */
     public String tag(String key) {
         return tags.get(key);
+    }
+
+    /**
+     * 是否为失败补偿重投。
+     *
+     * <p>重投事件跳过去重/限流，且失败不再二次落盘（原记录已在补偿状态机内）。
+     * 该标记是运行时语义，标记为 {@code transient}，不参与序列化。</p>
+     *
+     * @return 是否重投
+     */
+    public boolean isReplay() {
+        return replay;
     }
 
     private static String requireScene(String scene) {
@@ -333,6 +347,7 @@ public final class NotifyEvent implements java.io.Serializable {
         private String eventId;
         private Runnable onSuccess;
         private Consumer<Throwable> onError;
+        private boolean replay;
 
         private Builder(String scene) {
             this.scene = scene;
@@ -427,6 +442,17 @@ public final class NotifyEvent implements java.io.Serializable {
 
         public Builder onError(Consumer<Throwable> onError) {
             this.onError = onError;
+            return this;
+        }
+
+        /**
+         * 标记为失败补偿重投（跳过去重/限流、失败不再落盘）。
+         *
+         * @param replay 是否重投
+         * @return 构建器
+         */
+        public Builder replay(boolean replay) {
+            this.replay = replay;
             return this;
         }
 

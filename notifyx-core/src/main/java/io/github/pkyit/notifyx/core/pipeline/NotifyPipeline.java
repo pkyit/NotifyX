@@ -405,7 +405,7 @@ public final class NotifyPipeline {
     }
 
     private void persistFailure(NotifyEvent event, String channel, SendResult result, int attempts, String dedupeKey) {
-        if (failureStore == null) {
+        if (failureStore == null || event.isReplay()) {
             return;
         }
         try {

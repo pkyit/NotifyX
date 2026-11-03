@@ -46,7 +46,7 @@ public final class SceneRateLimitFilter implements EventFilter {
 
     @Override
     public FilterVerdict doFilter(FilterContext ctx) {
-        if (ctx.critical()) {
+        if (ctx.critical() || ctx.event().isReplay()) {
             return FilterVerdict.pass();
         }
         Rule rule = rules.get(ctx.event().scene());

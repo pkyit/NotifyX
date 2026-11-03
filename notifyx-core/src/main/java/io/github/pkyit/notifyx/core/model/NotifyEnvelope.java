@@ -152,6 +152,22 @@ public record NotifyEnvelope(
      * @return 事件
      */
     public NotifyEvent toEvent() {
+        return toEvent(false);
+    }
+
+    /**
+     * 还原为失败补偿重投事件：跳过管线内的去重/限流，且失败不再二次落盘。
+     *
+     * <p>原记录已在补偿状态机内（requeue/DEAD），若重投再次经过去重器会被误判为重复，
+     * 再次落盘则会自我复制失败记录（设计书 §9.9）。</p>
+     *
+     * @return 重投事件
+     */
+    public NotifyEvent toReplayEvent() {
+        return toEvent(true);
+    }
+
+    private NotifyEvent toEvent(boolean replay) {
         NotifyEvent.Builder builder = NotifyEvent.builder(scene)
                 .eventId(eventId)
                 .level(level)
@@ -160,7 +176,8 @@ public record NotifyEnvelope(
                 .bizId(bizId)
                 .dedupeKey(dedupeKey)
                 .occurredAt(occurredAt)
-                .async(false);
+                .async(false)
+                .replay(replay);
         if (title != null) {
             builder.title(title);
         }
