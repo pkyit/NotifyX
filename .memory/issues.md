@@ -526,3 +526,73 @@
   `x-dead-letter-routing-key`（修复后断言 `.containsEntry("x-dead-letter-routing-key", "dead")`）。
 - **关闭方式**：producer/consumer 双侧主队列补 `x-dead-letter-routing-key=dead`，声明 durable
   死信队列 `{retry.exchange}.dead` 并绑定 routing key `dead`；重投时复制原消息头（保留 `messageId`）。
+
+## ISSUE-054 聚合摘要 sink 直连管线，阻塞单线程调度器
+- **状态**：OPEN（2026-11-03 代码质量评估发现，N-1）
+- **现象**：`NotifyxAutoConfiguration.notifyxNotifyKit` 以 `aggregator.sink(pipeline::handle)` 装配；
+  T0 `Aggregator` 与 T1 `RedisAggregator` 的窗口 flush 都在单线程调度器上同步执行完整管线
+  （含重试 `Thread.sleep` 退避），一条慢/失败摘要会阻塞该实例所有其他窗口的摘要。
+- **证据**：`NotifyxAutoConfiguration.java:385`；`Aggregator.java:58,117`；`RedisAggregator.java:83,134`；
+  同文件 387-388 行 iter-59 已为 `InMemoryDeferredHandler` 修过同类问题并留注释，聚合器被遗漏。
+- **影响**：聚合开启时摘要时效性被最慢渠道绑架，违背「异步路径有界」红线。
+- **建议**：聚合 sink 改经 `taskExecutor.execute()`，与 defer 重放同构。
+
+## ISSUE-055 补偿重投自我复制失败记录 + 去重黑洞
+- **状态**：OPEN（2026-11-03 代码质量评估发现，N-2）
+- **现象**：`FailureCompensationRunner.deliver → deliverSync → pipeline.handle` 完整重入管线：
+  1. 重投失败时 `persistFailure` 用同一 `eventId` 再落一条记录；`InMemoryFailureStore.save`
+     无 recordId 唯一性 → 重复记录逐轮放大（JDBC 退化为主键冲突 warn，LocalFile 产生跨分片双文件）；
+  2. 重投事件会再过 `DedupeFilter`：静默窗口内被判 DEDUPED → handle 返回 false →
+     补偿视为失败 → requeue → 最终转 DEAD，即「该补偿成功的通知被自己的去重器杀死」。
+- **证据**：`FailureCompensationRunner.java:130-162`；`NotifyPipeline.java:426`（recordId=eventId）；
+  `InMemoryFailureStore.java:48-53`（save 无唯一性约束）。
+- **影响**：补偿是「通知不丢」的最后防线，该缺陷造成重复投递放大与静默误杀。
+- **建议**：补偿重投豁免 dedupe/rate-limit；补偿路径失败不再 `persistFailure`；
+  save 增加 recordId 覆盖语义。涉及管线入口契约，需同步 design.md §9.9 并评估 D-NNN。
+
+## ISSUE-056 EmailChannel 空收件人 NPE 重试风暴
+- **状态**：OPEN（2026-11-03 代码质量评估发现，N-3）
+- **现象**：场景未配接收人时管线以 `receiver=null` 调用 `sendOne`，`InternetAddress.parse(null)`
+  抛 NPE，落入管线 `RuntimeException` 分支按可重试失败处理：重试 N 次 + 记熔断失败 + 落盘补偿。
+- **证据**：`EmailChannel.java:94`；`NotifyPipeline.java:225-226,343-355`。
+- **影响**：静态配置错误转化为运行期重试风暴与熔断污染，违背「参数类错误不可盲目重试」红线。
+- **建议**：`EmailChannel.send` 校验空 receiver 抛 `ChannelProtocolException`（不可重试）。
+
+## ISSUE-057 EmailChannel 自定义 Message-ID 被 JavaMail 静默覆盖
+- **状态**：OPEN（2026-11-03 代码质量评估发现，N-4）
+- **现象**：发送前 `setHeader("Message-ID", ...)`，但 `Transport.send → saveChanges → updateHeaders`
+  会无条件重新生成 Message-ID，幂等头静默失效；静态 mock `Transport.send` 的契约测试覆盖不到。
+- **证据**：`EmailChannel.java:98-101`；Jakarta Mail `MimeMessage.updateMessageID()` 语义；
+  与 ISSUE-016 同属「静态 mock 覆盖不到协议交互」盲区。
+- **影响**：按 Message-ID 幂等的下游会把重发当新邮件；`X-Notifyx-Event-Id` 仍在，可作替代键。
+- **建议**：子类化 `MimeMessage` 重写 `updateMessageID()`；或文档明示幂等以 `X-Notifyx-Event-Id` 为准。
+
+## ISSUE-058 T0/T1 聚合 level 语义不一致
+- **状态**：OPEN（2026-11-03 代码质量评估发现，N-5）
+- **现象**：T0 `Aggregator` 窗口内取最高级别（`level.atLeast`）；T1 `RedisAggregator` 用
+  `HSETNX level` 第一个事件定死。先 WARN 后 ERROR 的故障中，T1 摘要永远停在 WARN。
+- **证据**：`Aggregator.java:93` vs `RedisAggregator.java:50`（RECORD Lua 脚本）。
+- **影响**：同一故障在不同能力梯度下摘要级别不同，违反「梯度只换存储不换语义」原则。
+- **建议**：Lua 改为按级别序比较后写入。
+
+## ISSUE-059 Webhook 响应体读取无大小限制
+- **状态**：OPEN（2026-11-03 代码质量评估发现，N-6）
+- **现象**：`BodyHandlers.ofString()` 先把整个响应体读进内存再 `truncate(1KB)`；readTimeout
+  只约束字节间隔不约束总量，慢速大 body 可长时间占用发送线程。
+- **证据**：`WebhookChannel.java:104,260-265`。
+- **影响**：恶意/故障接收端返回超大 body 可造成堆压力甚至 OOM。
+- **建议**：改 `BodyHandlers.ofInputStream()` 限量读取（如 64KB）。
+
+## ISSUE-060 低风险缺陷清单（2026-11-03 评估，N-7~N-14）
+- **状态**：OPEN（合并登记，详见 `docs/code-quality-review-2026-11-03.md` §5）
+- **清单与证据**：
+  1. N-7 `RetryPolicy.java:78`：退避乘法 long 溢出（base>~106 天时退避变 1ms）；
+  2. N-8 `PriorityNotifyExecutor.java:76-109`：队列满替换 check-then-remove 非原子 + O(n) 扫描；
+  3. N-9 `KafkaNotifyBus.java:71`：`.get(10s)` 同步阻塞，`sendAsync` 与 `send` 同语义（设计取舍，文档需明示）；
+  4. N-10 `RabbitMqEnvelopeConsumer.java:86-99`：DLX 重试依赖 `async.enabled=false` 隐式约定，无启动校验；
+  5. N-11 `LocalFileFailureStore.java:510`：`\u` 转义边界 `i + 4 <` 应为 `<=`，串尾转义被吞；
+  6. N-12 `MemoryRateLimiter.java:33-43,71`：空 deque 常驻 map，`evictExpired()` 无调用方（grep 确认）；
+  7. N-13 `NotifyxAutoConfiguration.java:355`：重复构造 SceneRegistry，未复用 Bean；
+  8. N-14 `Aggregator.java:132-142`：flush/record 竞态窗口边界丢 1 条计数。
+- **影响**：单项影响均小或有界，合并为一批修复。
+- **建议**：随 1.0.2 批次处理，逐项补单测。
