@@ -331,6 +331,7 @@ public class NotifyxAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "notifyx", name = "mode", havingValue = "local", matchIfMissing = true)
     public NotifyKit notifyxNotifyKit(NotifyxProperties properties,
+                                      SceneRegistry sceneRegistry,
                                       ObjectProvider<NotifyChannel> channels,
                                       TemplateEngine templateEngine,
                                       Map<String, MessageTemplate> templates,
@@ -352,7 +353,7 @@ public class NotifyxAutoConfiguration {
         filters.sort(Comparator.comparingInt(EventFilter::order));
         DeferredHandler deferredHandler = deferredHandlers.getIfAvailable();
         NotifyPipeline pipeline = NotifyPipeline.builder()
-                .sceneRegistry(notifyxSceneRegistry(properties))
+                .sceneRegistry(sceneRegistry)
                 .filters(filters)
                 .channelRegistry(ChannelRegistry.of(channels.orderedStream().toList()))
                 .templateEngine(templateEngine)
@@ -382,7 +383,16 @@ public class NotifyxAutoConfiguration {
                 .escalation(escalation)
                 .deferredHandler(deferredHandler)
                 .build();
-        aggregator.sink(pipeline::handle);
+        // 聚合摘要与 defer 重放同构：必须经有界执行器，单线程调度器直接 handle 会被慢渠道塞住，
+        // 导致风暴场景下所有窗口摘要排队延迟；拒绝时走既有丢弃日志而非无界阻塞
+        aggregator.sink(event -> {
+            try {
+                taskExecutor.execute(event.level(), event.eventId(), () -> pipeline.handle(event));
+            } catch (RejectedExecutionException ex) {
+                log.warn("notifyx aggregation summary rejected scene={} eventId={}",
+                        event.scene(), event.eventId());
+            }
+        });
         if (deferredHandler instanceof InMemoryDeferredHandler inMemory) {
             // 重放必须经有界执行器：单线程直接 handle 会串行排空清晨堆积并绕过队列上限/优先级/水位观测，
             // 与 DefaultNotifyKit 异步路径保持同一入口；拒绝时走既有拒绝日志而非无界阻塞

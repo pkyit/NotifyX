@@ -152,7 +152,9 @@ public final class FailureCompensationRunner implements AutoCloseable {
     }
 
     private boolean deliver(NotifyEnvelope envelope) {
-        io.github.pkyit.notifyx.core.model.NotifyEvent event = envelope.toEvent();
+        // 补偿重投必须豁免去重/限流并禁止二次落盘：否则会被自身去重器判死、
+        // 再失败会以同一 eventId 自我复制失败记录（ISSUE-055）
+        io.github.pkyit.notifyx.core.model.NotifyEvent event = envelope.toReplayEvent();
         if (notifyKit instanceof DefaultNotifyKit defaultKit) {
             return defaultKit.deliverSync(event);
         }
