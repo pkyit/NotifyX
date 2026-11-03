@@ -36,6 +36,9 @@ public class RabbitMqBusProperties {
     /** publisher confirm 超时。 */
     private Duration confirmTimeout = Duration.ofSeconds(5);
 
+    /** 退避重试（死信 + 多级 TTL，设计书 §11.2）。 */
+    private Retry retry = new Retry();
+
     public String getHost() {
         return host;
     }
@@ -98,5 +101,43 @@ public class RabbitMqBusProperties {
 
     public void setConfirmTimeout(Duration confirmTimeout) {
         this.confirmTimeout = confirmTimeout;
+    }
+
+    public Retry getRetry() {
+        return retry;
+    }
+
+    public void setRetry(Retry retry) {
+        this.retry = retry;
+    }
+
+    /**
+     * 退避重试配置（{@code notifyx.bus.rabbitmq.retry.*}）。
+     *
+     * @since 1.0.1
+     */
+    public static class Retry {
+
+        /** 是否启用退避重试（死信 + 多级 TTL），默认关。 */
+        private boolean enabled = false;
+
+        /** 重试交换（死信交换）名。 */
+        private String exchange = "notifyx.retry";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getExchange() {
+            return exchange;
+        }
+
+        public void setExchange(String exchange) {
+            this.exchange = exchange;
+        }
     }
 }

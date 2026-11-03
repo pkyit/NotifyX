@@ -1,7 +1,11 @@
 package io.github.pkyit.notifyx.bus.rabbitmq;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +30,18 @@ import io.github.pkyit.notifyx.core.support.NotifyEnvelopeCodec;
 public final class RabbitMqNotifyBus implements NotifyBus {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqNotifyBus.class);
+
+    /** 死信计数头（consumer 侧退避重试使用，与设计书 §11.2 对齐）。 */
+    static final String RETRY_COUNT_HEADER = "x-retry-count";
+
+    /** 死信队列的 routing key（重试耗尽后消息在此落库，设计书 §11.2/§11.4）。 */
+    static final String DEAD_ROUTING_KEY = "dead";
+
+    /** 固定三级退避（设计书 §11.2）：{@code retry.5s / retry.1m / retry.5m}。 */
+    static final List<RetryLevel> RETRY_LEVELS = List.of(
+            new RetryLevel("5s", 5_000L),
+            new RetryLevel("1m", 60_000L),
+            new RetryLevel("5m", 300_000L));
 
     private final RabbitMqBusProperties properties;
     private final ConnectionFactory factory;
@@ -92,7 +108,42 @@ public final class RabbitMqNotifyBus implements NotifyBus {
         connection = factory.newConnection();
         channel = connection.createChannel();
         channel.confirmSelect();
-        channel.queueDeclare(properties.getQueue(), true, false, false, null);
+        declareTopology(channel);
+    }
+
+    /**
+     * 声明主队列（退避重试开启时挂死信交换与死信 routing key）+ 多级 TTL 重试队列与绑定 +
+     * durable 死信队列（重试耗尽后消息落此队列，设计书 §11.2/§11.4）。声明幂等，
+     * producer 与 consumer 可重复调用；关闭重试时仅声明 durable 主队列（与 1.0.0 一致）。
+     *
+     * @param channel 通道
+     */
+    private void declareTopology(Channel channel) throws IOException {
+        String exchange = null;
+        Map<String, Object> args = null;
+        if (properties.getRetry().isEnabled()) {
+            exchange = properties.getRetry().getExchange();
+            args = Map.of(
+                    "x-dead-letter-exchange", exchange,
+                    "x-dead-letter-routing-key", DEAD_ROUTING_KEY);
+        }
+        channel.queueDeclare(properties.getQueue(), true, false, false, args);
+        if (exchange == null) {
+            return;
+        }
+        channel.exchangeDeclare(exchange, "direct", true);
+        for (RetryLevel level : RETRY_LEVELS) {
+            String queue = exchange + "." + level.label();
+            Map<String, Object> waitArgs = new LinkedHashMap<>();
+            waitArgs.put("x-message-ttl", level.ttlMillis());
+            waitArgs.put("x-dead-letter-exchange", "");
+            waitArgs.put("x-dead-letter-routing-key", properties.getQueue());
+            channel.queueDeclare(queue, true, false, false, waitArgs);
+            channel.queueBind(queue, exchange, level.label());
+        }
+        String deadQueue = exchange + ".dead";
+        channel.queueDeclare(deadQueue, true, false, false, null);
+        channel.queueBind(deadQueue, exchange, DEAD_ROUTING_KEY);
     }
 
     private void closeQuietly() {
@@ -130,5 +181,14 @@ public final class RabbitMqNotifyBus implements NotifyBus {
         factory.setVirtualHost(properties.getVirtualHost());
         factory.setConnectionTimeout((int) properties.getConnectionTimeout().toMillis());
         return factory;
+    }
+
+    /**
+     * 单级退避定义：标签（作为重试交换的 routing key 与队列名后缀）+ TTL 毫秒。
+     *
+     * @param label 标签，如 {@code 5s}
+     * @param ttlMillis 消息 TTL
+     */
+    record RetryLevel(String label, long ttlMillis) {
     }
 }
