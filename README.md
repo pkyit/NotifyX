@@ -495,12 +495,12 @@ notifyx:
 
 ```bash
 # Kafka（默认）
-java -jar notifyx-consumer/target/notifyx-consumer-1.0.2.jar \
+java -jar notifyx-consumer/target/notifyx-consumer-1.0.3.jar \
   --spring.kafka.bootstrap-servers=127.0.0.1:9092 \
   --notifyx.consumer.topic=notifyx-events
 
 # RabbitMQ（consumer 会声明与 producer 等价的拓扑，含可选退避重试队列）
-java -jar notifyx-consumer/target/notifyx-consumer-1.0.2.jar \
+java -jar notifyx-consumer/target/notifyx-consumer-1.0.3.jar \
   --notifyx.consumer.transport=rabbitmq \
   --notifyx.consumer.rabbitmq.queue=notifyx-events \
   --notifyx.consumer.rabbitmq.retry-enabled=true \
