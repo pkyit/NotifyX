@@ -73,6 +73,15 @@ class RetryPolicyTest {
         assertThat(policy.delayAfter(1, null).toMillis()).isBetween(1000L, 2000L);
     }
 
+    @Test
+    @DisplayName("超大基数退避饱和到 maxDelay，绝不溢出为负")
+    void shouldSaturateNotOverflowOnHugeBase() {
+        RetryPolicy policy = new RetryPolicy(3, Duration.ofDays(400), Duration.ofSeconds(60), 0.0);
+
+        assertThat(policy.delayAfter(21, null)).isEqualTo(Duration.ofSeconds(60));
+        assertThat(policy.delayAfter(1, null)).isEqualTo(Duration.ofSeconds(60));
+    }
+
     private static final class StubChannel implements NotifyChannel {
 
         private final int maxRetries;

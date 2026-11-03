@@ -85,6 +85,21 @@ class FailurePersistenceTest {
         assertThat(event.params().get("phone")).isEqualTo("13812345678");
     }
 
+    @Test
+    @DisplayName("补偿重投（replay）失败不二次落盘，避免同一 eventId 自我复制")
+    void shouldNotPersistReplayFailure() {
+        NotifyPipeline pipeline = pipeline(1);
+
+        boolean handled = pipeline.handle(NotifyEvent.builder("SCENE_A")
+                .level(Level.ERROR)
+                .bizId("B1")
+                .replay(true)
+                .build());
+
+        assertThat(handled).isFalse();
+        assertThat(store.records).isEmpty();
+    }
+
     private NotifyPipeline pipeline(int maxAttempts) {
         return pipeline(maxAttempts, false);
     }

@@ -75,6 +75,18 @@ class NotifyPipelineTest {
     }
 
     @Test
+    @DisplayName("补偿重投（replay）跳过去重，同指纹在窗口内仍投递")
+    void replayBypassesDedupe() {
+        NotifyPipeline pipeline = pipeline(List.of(new DedupeFilter(dedupeStore)),
+                SceneConfig.builder("SCENE_A").channels(List.of("recording")).silentWindow(Duration.ofMinutes(5)).build());
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A").bizId("SO1").build());
+        pipeline.handle(NotifyEvent.builder("SCENE_A").bizId("SO1").replay(true).build());
+
+        assertThat(channel.receivers).hasSize(2);
+    }
+
+    @Test
     @DisplayName("T4：发送失败后释放去重槽位，下一次同指纹可再次触发")
     void releasesDedupeOnFailure() {
         channel.failFirst.set(true);

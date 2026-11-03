@@ -80,6 +80,28 @@ class EmailChannelTest {
     }
 
     @Test
+    @DisplayName("空收件人 → ChannelProtocolException（不可重试），不发起投递")
+    void shouldRejectBlankReceiver() {
+        assertThatThrownBy(() -> new EmailChannel(properties()).send(context("t", "c", "   ")))
+                .isInstanceOf(ChannelProtocolException.class)
+                .hasMessageContaining("no recipient");
+        assertThat(sent.get()).isNull();
+    }
+
+    @Test
+    @DisplayName("saveChanges 触发 updateMessageID 后仍保留自定义 Message-ID 幂等键")
+    void shouldPreserveMessageIdAfterSaveChanges() throws Exception {
+        EmailChannel channel = new EmailChannel(properties());
+        NotifyContext ctx = context("t", "c", "ops@example.com");
+
+        channel.send(ctx);
+
+        MimeMessage message = sent.get();
+        message.saveChanges();
+        assertThat(message.getHeader("Message-ID")[0]).contains(ctx.event().eventId());
+    }
+
+    @Test
     @DisplayName("标题为空时用场景码作为主题")
     void shouldFallbackSubjectToScene() throws Exception {
         EmailChannel channel = new EmailChannel(properties());

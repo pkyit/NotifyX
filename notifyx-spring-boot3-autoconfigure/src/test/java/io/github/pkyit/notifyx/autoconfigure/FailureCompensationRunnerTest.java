@@ -153,6 +153,7 @@ class FailureCompensationRunnerTest {
 
         assertThat(delivered).hasSize(1);
         assertThat(delivered.get(0).scene()).isEqualTo("SCENE_A");
+        assertThat(delivered.get(0).isReplay()).isTrue();
         assertThat(store.all().get(0).status()).isEqualTo(RecordStatus.SENT);
     }
 
