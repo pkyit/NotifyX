@@ -48,4 +48,16 @@ public final class RedisIdempotencyStore implements IdempotencyStore {
             return fallback.firstSeen(key);
         }
     }
+
+    @Override
+    public void release(String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        try {
+            template.delete(PREFIX + key);
+        } catch (RuntimeException ex) {
+            log.warn("notifyx redis idempotency release failed: {}", ex.toString());
+        }
+    }
 }

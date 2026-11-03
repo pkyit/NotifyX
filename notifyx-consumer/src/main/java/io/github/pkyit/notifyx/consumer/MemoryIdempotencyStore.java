@@ -55,6 +55,13 @@ public final class MemoryIdempotencyStore implements IdempotencyStore {
         return inserted;
     }
 
+    @Override
+    public void release(String key) {
+        if (key != null) {
+            seen.remove(key);
+        }
+    }
+
     private void evict(long now) {
         int target = Math.max(1, maxEntries / 10);
         for (int i = 0; i < target; i++) {

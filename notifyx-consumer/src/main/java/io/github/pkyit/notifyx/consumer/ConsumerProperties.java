@@ -12,6 +12,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "notifyx.consumer")
 public class ConsumerProperties {
 
+    /** 传输类型：kafka | rabbitmq（默认 kafka）。 */
+    private String transport = "kafka";
+
     /** 订阅 topic。 */
     private String topic = "notifyx-events";
 
@@ -32,6 +35,27 @@ public class ConsumerProperties {
 
     /** JDBC 密码。 */
     private String jdbcPassword;
+
+    /** RabbitMQ 消费配置（transport=rabbitmq 时生效）。 */
+    private Rabbitmq rabbitmq = new Rabbitmq();
+
+    /**
+     * 传输类型。
+     *
+     * @return {@code kafka} 或 {@code rabbitmq}
+     */
+    public String getTransport() {
+        return transport;
+    }
+
+    /**
+     * 设置传输类型。
+     *
+     * @param transport {@code kafka} 或 {@code rabbitmq}
+     */
+    public void setTransport(String transport) {
+        this.transport = transport;
+    }
 
     public String getTopic() {
         return topic;
@@ -87,5 +111,54 @@ public class ConsumerProperties {
 
     public void setJdbcPassword(String jdbcPassword) {
         this.jdbcPassword = jdbcPassword;
+    }
+
+    public Rabbitmq getRabbitmq() {
+        return rabbitmq;
+    }
+
+    public void setRabbitmq(Rabbitmq rabbitmq) {
+        this.rabbitmq = rabbitmq;
+    }
+
+    /**
+     * RabbitMQ 消费配置（{@code notifyx.consumer.rabbitmq.*}）。
+     *
+     * @since 1.0.1
+     */
+    public static class Rabbitmq {
+
+        /** 订阅队列名（与 {@code @RabbitListener} 引用一致）。 */
+        private String queue = "notifyx-events";
+
+        /** 是否启用退避重试（死信 + 多级 TTL，设计书 §11.2），默认关。 */
+        private boolean retryEnabled = false;
+
+        /** 重试交换（死信交换）名。 */
+        private String retryExchange = "notifyx.retry";
+
+        public String getQueue() {
+            return queue;
+        }
+
+        public void setQueue(String queue) {
+            this.queue = queue;
+        }
+
+        public boolean isRetryEnabled() {
+            return retryEnabled;
+        }
+
+        public void setRetryEnabled(boolean retryEnabled) {
+            this.retryEnabled = retryEnabled;
+        }
+
+        public String getRetryExchange() {
+            return retryExchange;
+        }
+
+        public void setRetryExchange(String retryExchange) {
+            this.retryExchange = retryExchange;
+        }
     }
 }

@@ -28,6 +28,10 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
             values (?, ?, ?)
             """;
 
+    private static final String DELETE = """
+            delete from nx_idempotency where idempotency_key = ?
+            """;
+
     private final String url;
     private final String user;
     private final String password;
@@ -63,6 +67,20 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
             }
             log.warn("notifyx jdbc idempotency failed, fail-open: {}", ex.toString());
             return true;
+        }
+    }
+
+    @Override
+    public void release(String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        try (Connection connection = DriverManager.getConnection(url, user, password);
+             PreparedStatement statement = connection.prepareStatement(DELETE)) {
+            statement.setString(1, key);
+            statement.executeUpdate();
+        } catch (SQLException ex) {
+            log.warn("notifyx jdbc idempotency release failed: {}", ex.toString());
         }
     }
 }
