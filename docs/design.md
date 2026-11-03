@@ -1546,6 +1546,13 @@ PENDING ──(补偿任务拾取，CAS version)──→ SENDING ──(成功)
 
 **磁盘保护**：`~/.notifyx/pending` 必须设**容量上限**（默认 100MB / 10000 文件），超出后**丢最旧的 DEAD 记录**，并在启动诊断与指标里暴露 `notifyx.fallback.overflow`。否则通知持续失败会把磁盘写满，**把业务系统拖死——这是违反承诺 P2 的最隐蔽路径**。
 
+**补偿重投豁免（重投不被自己的防线杀死）**：补偿任务无条件重入管线，若再过 `DedupeFilter` 会被判
+DEDUPED 而 `handle` 返回 false——补偿误判失败并转 DEAD；若重投失败再 `persistFailure`，会以同一
+eventId 自我复制失败记录。因此 `NotifyEnvelope.toReplayEvent()` 还原的事件携带 `replay` 标记
+（`transient`，不进序列化），`DedupeFilter` / `SceneRateLimitFilter` / `GlobalRateLimitFilter` 对
+replay 事件直接放行（CRITICAL 旁路与安静时间语义保留），`persistFailure` 对 replay 事件短路不落盘。
+重投失败的 requeue/DEAD 仍由补偿状态机承担，见 D-032。
+
 ### 9.10 优雅关闭
 
 ```java
