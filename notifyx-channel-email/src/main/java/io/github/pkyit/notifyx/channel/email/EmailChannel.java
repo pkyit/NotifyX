@@ -80,6 +80,28 @@ public class EmailChannel implements NotifyChannel {
         return session;
     }
 
+    /**
+     * 保留手工设置的 Message-ID。
+     *
+     * <p>Jakarta Mail 的 {@link MimeMessage#updateMessageID()} 在 {@code saveChanges()} 时
+     * 无条件重新生成 Message-ID，会覆盖掉通知幂等键（ISSUE-057）。子类仅在尚无
+     * Message-ID 时沿用默认行为。</p>
+     */
+    private static final class MessageIdPreservingMimeMessage extends MimeMessage {
+
+        private MessageIdPreservingMimeMessage(Session session) {
+            super(session);
+        }
+
+        @Override
+        protected void updateMessageID() throws MessagingException {
+            if (getMessageID() != null) {
+                return;
+            }
+            super.updateMessageID();
+        }
+    }
+
     @Override
     public String name() {
         return NAME;
@@ -87,9 +109,12 @@ public class EmailChannel implements NotifyChannel {
 
     @Override
     public SendResult send(NotifyContext ctx) throws ChannelException {
+        if (ctx.receiver() == null || ctx.receiver().isBlank()) {
+            throw new ChannelProtocolException(NAME, "no recipient configured for email scene");
+        }
         long started = System.nanoTime();
         try {
-            MimeMessage message = new MimeMessage(session);
+            MimeMessage message = new MessageIdPreservingMimeMessage(session);
             message.setFrom(new InternetAddress(properties.getFrom(), properties.getFromName(), "UTF-8"));
             message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(ctx.receiver(), false));
             message.setSubject(ctx.renderedTitle() == null ? ctx.event().scene() : ctx.renderedTitle(), "UTF-8");
