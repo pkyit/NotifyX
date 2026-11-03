@@ -47,7 +47,12 @@ public final class RedisAggregator implements EventAggregator {
                 redis.call('HSET', KEYS[1], 'scene', ARGV[1], 'firstAt', ARGV[2], 'firstSample', ARGV[3])
             end
             redis.call('HSET', KEYS[1], 'lastAt', ARGV[2], 'lastSample', ARGV[3])
-            redis.call('HSETNX', KEYS[1], 'level', ARGV[4])
+            local levels = {INFO=1, WARN=2, ERROR=3, CRITICAL=4}
+            local cur = redis.call('HGET', KEYS[1], 'level')
+            local newOrd = levels[ARGV[4]] or 2
+            if not cur or (levels[cur] or 0) < newOrd then
+                redis.call('HSET', KEYS[1], 'level', ARGV[4])
+            end
             redis.call('SADD', KEYS[2], ARGV[5])
             redis.call('PEXPIRE', KEYS[1], ARGV[6])
             redis.call('PEXPIRE', KEYS[2], ARGV[6])
