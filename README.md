@@ -445,8 +445,11 @@ spring:
     password: ...
 ```
 
-- 建表脚本：`notifyx-store-jdbc/src/main/resources/sql/{mysql,postgresql,h2}/schema.sql`；
-  DM/Kingbase 需按 §12.4 的方言清单单独适配（尚未验证）。
+- 建表脚本：`notifyx-store-jdbc/src/main/resources/sql/{mysql,postgresql,h2,dm,kingbase,opengauss}/schema.sql`；
+  信创库（DM/Kingbase/openGauss）DDL 已按 §12.4 方言清单单独编写（`clob`/`timestamp(0)`/独立索引）。
+  ⚠️ 1.0.1 起 `nx_audit.level` 已改名 `event_level`（规避金仓 `level` 保留字），
+  基于 1.0.0 旧 schema 建表的用户升级需执行
+  `alter table nx_audit rename column level to event_level`（或用新 DDL 重建）。
 - `nx_audit` 写失败只 warn，不影响发送；`nx_failure_record` 用 `version` 乐观锁 CAS，
   与文件/内存实现共用同一状态机。
 - 已在真实 MySQL 8.0.46 与 PostgreSQL 16.15 上跑通审计写入与失败记录 CRUD。
@@ -479,9 +482,12 @@ notifyx:
 - Kafka key = `dedupeKey`（同事件保序），value = `NotifyEnvelope` JSON（含 schemaVersion）；
 - RabbitMQ：换 `notifyx-bus-rabbitmq` + `notifyx.bus=rabbitmq`，durable queue + publisher confirm，
   配置在 `notifyx.bus.rabbitmq.*`（host/port/username/password/queue）；
+  - 退避重试（DLX + 多级 TTL）：`notifyx.bus.rabbitmq.retry.enabled=true` +
+    `notifyx.bus.rabbitmq.retry.exchange=notifyx.retry`（默认），producer 会声明主队列 → 重试交换机
+    `notifyx.retry` → 3 级 TTL 队列 `notifyx.retry.{5s,1m,5m}`（到期回主队列）；
 - 发布失败写入 `FailureStore` 兜底，不向业务抛异常；
 - `onSuccess/onError` 无法跨进程，MQ 模式下只 warn；
-- consumer 见下一节（Kafka 已实现；RabbitMQ consumer 待补）。
+- consumer 见下一节（Kafka / RabbitMQ 均已实现）。
 
 ## MQ Consumer（独立服务）
 
@@ -489,14 +495,16 @@ notifyx:
 
 ```bash
 # Kafka（默认）
-java -jar notifyx-consumer/target/notifyx-consumer-1.0.0.jar \
+java -jar notifyx-consumer/target/notifyx-consumer-1.0.2.jar \
   --spring.kafka.bootstrap-servers=127.0.0.1:9092 \
   --notifyx.consumer.topic=notifyx-events
 
-# RabbitMQ（需 producer 先声明 durable 队列）
-java -jar notifyx-consumer/target/notifyx-consumer-1.0.0.jar \
+# RabbitMQ（consumer 会声明与 producer 等价的拓扑，含可选退避重试队列）
+java -jar notifyx-consumer/target/notifyx-consumer-1.0.2.jar \
   --notifyx.consumer.transport=rabbitmq \
   --notifyx.consumer.rabbitmq.queue=notifyx-events \
+  --notifyx.consumer.rabbitmq.retry-enabled=true \
+  --notifyx.consumer.rabbitmq.retry-exchange=notifyx.retry \
   --spring.rabbitmq.host=127.0.0.1 --spring.rabbitmq.port=5672
 ```
 
@@ -506,8 +514,21 @@ java -jar notifyx-consumer/target/notifyx-consumer-1.0.0.jar \
   - `redis`：`SET NX EX 24h`，Redis 异常降级内存（可能重复，不丢通知）；
   - `jdbc`：`nx_idempotency` 唯一键，重复插入即视为重复；连接用
     `notifyx.consumer.jdbc-url/user/password`（驱动由部署方提供），DDL 见
-    `notifyx-consumer/src/main/resources/sql/{mysql,postgresql}/idempotency.sql`；
-- `async.enabled=false`，按分区同步处理保序；坏报文只记录并 ACK，避免毒消息卡分区。
+    `notifyx-consumer/src/main/resources/sql/{mysql,postgresql,dm,kingbase,opengauss}/idempotency.sql`；
+  - `nx_idempotency` 保留期清理：`JdbcIdempotencyRetention.purgeOlderThan(days)` 分批删除
+    （默认 1000/批，标准 `limit`/`in` 语法），调度由部署方负责（`@Scheduled` / CronJob），
+    SDK 不内置后台线程、不默认自动删除；
+- `async.enabled=false`，按分区同步处理保序；坏报文只记录并 ACK，避免毒消息卡分区；
+- RabbitMQ 死信/重试：`notifyx.consumer.rabbitmq.retry-enabled=true` 时，处理失败且
+  `x-retry-count < 3` 的消息会先释放幂等键、再投回重试交换机（routing key `5s`/`1m`/`5m`，
+  保留原消息头与 `messageId`）并 ACK；否则抛 `AmqpRejectAndDontRequeueException`，
+  由 broker 按 `x-dead-letter-routing-key=dead` 进入死信队列 `notifyx.retry.dead`
+  （durable，无 TTL，供人工排查 / 重放）。producer / consumer 两侧的
+  `retry.*` 配置必须一致，二者各自声明等价拓扑（幂等声明，规避 `PRECONDITION_FAILED`）。
+- 堆积指标 `notifyx.consumer.lag`：标签 `transport`/`queue`（Kafka 为 topic）。RabbitMQ 取主队列
+  消息数，Kafka 按分区 `endOffset - committedOffset` 求和，采样失败降级为上次成功值、不影响消费。
+  只有存在 `MeterRegistry` 时才注册，需要部署方加入 `spring-boot-starter-actuator`
+  （或自行提供 registry）后经 Prometheus 端点暴露。
 
 ## 真实邮件冒烟（可选）
 

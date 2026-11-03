@@ -1,6 +1,6 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-11-02 00:45（iter-59：免打扰 defer 补全 + demo 实证）
+> 更新时间：2026-11-02 10:40（iter-61/62：RabbitMQ DLX + 多级 TTL 重试、consumer 死信重试与拓扑）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B clean install` 通过（Spotless/Checkstyle/JaCoCo 全绿），
@@ -119,10 +119,10 @@ Central 额度 2026-11-01 前不可发新版本；P2+ 目标见 iter-31 审计�
 - [x] **配置不一致诊断** —— iter-56（store/engine 与实际不一致时启动告警）
 - [x] **Redis 降级可见** —— iter-57（`Degradable`；健康 DEGRADED，诊断 tier 降 T0）
 - [x] **fail-fast 配置校验** —— iter-58（store/engine 不一致时严格模式阻止启动）
-- [ ] RabbitMQ 死信队列（DLX + 多级 TTL）
-- [ ] consumer 多实例分区消费与死信/重试
-- [ ] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期
-- [ ] 覆盖 T1–T24 的剩余高危用例（§18.2）
+- [x] RabbitMQ 死信队列（DLX + 多级 TTL） —— iter-61
+- [x] consumer 多实例分区消费与死信/重试 —— iter-62
+- [x] 信创 DDL（DM/Kingbase/openGauss）与 `nx_idempotency` 保留期 —— iter-60
+- [x] 覆盖 T1–T24 的剩余高危用例（§18.2） —— iter-63
 
 ### 明确不在本次交付范围（23 周路线图后续阶段）
 
@@ -160,8 +160,8 @@ sms4j 适配。
 
 1. **待用户决策**：A02/A03（目标级失败记录 + 定向重投，修多渠道路由覆盖与部分成功重复发送）、
    A04（无渠道返回 `NO_ROUTE` 而非成功）、A07（审计/落盘全链路脱敏）。
-2. **P2+ 扩展**：RabbitMQ DLX/多级 TTL、consumer 多实例分区与死信重试、信创 DDL
-   （DM/Kingbase/openGauss）与 `nx_idempotency` 保留期、Admin 控制台（P4）。
+2. **P2+ 扩展**：Admin 控制台（P4）；RabbitMQ DLX/多级 TTL、consumer 多实例分区与死信重试、
+   信创 DDL 与 `nx_idempotency` 保留期已分别在 iter-61/62/60 落地。
 3. **k8s 生产化**：自有镜像仓库 + Deployment + Secret 注入。
 4. **测试债**：T1–T24 剩余高危用例；core 覆盖率向 90% 提升。
 5. **Central 发布**：1.0.0 已于 2026-10-27 发布（iter-44）；后续修复按 §19.3 发 patch 版本。
@@ -291,3 +291,98 @@ sms4j 适配。
   3. `NOTIFYX_SMTP_PASSWORD` 缺失，决策邮件无法发送；也未收到可读取的邮件回复。
 - **下一步**：用户 push → 决策 ISSUE-039 / A02/A03/A04/A14 → 2026-11-01 后按
   1.0.1 流程复验并发布；06:00 后不再发起跨时段代码改动。
+
+## 13. 信创 DDL 与 nx_idempotency 保留期（iter-60，2026-11-02）
+
+- **范围**：落地「未实现」清单第 3 项「信创 DDL（DM/Kingbase/openGauss）与
+  `nx_idempotency` 保留期」，并落实设计书 §12.4 对 `level` 列名的修正（D-029）。
+- **1. 列名修正（破坏性，D-029）**：`nx_audit.level` → `nx_audit.event_level`
+  （规避金仓 `level` 保留字；双引号备选方案在 MySQL 下不可行）。`JdbcAuditRecorder`
+  INSERT 与 mysql/postgresql/h2 三套 schema.sql 同步修改。
+- **2. 信创 DDL（6 个新文件）**：
+  - `notifyx-store-jdbc/src/main/resources/sql/{dm,kingbase,opengauss}/schema.sql`
+    （DM 用 `clob`/`timestamp(0)`，Kingbase/openGauss 用 `text`/`timestamp`，索引全部独立建）；
+  - `notifyx-consumer/src/main/resources/sql/{dm,kingbase,opengauss}/idempotency.sql`。
+- **3. nx_idempotency 保留期**：新增 `JdbcIdempotencyRetention`（DriverManager 直连，
+  `purgeBefore`/`purgeOlderThan`，分批默认 1000/批，标准 `limit`/`in`），调度由部署方负责，
+  SDK 不内置后台线程、不默认自动删除。
+- **4. 测试**：store-jdbc 13 用例（11 执行 + 2 live 跳过）、consumer 新增
+  `JdbcIdempotencyRetentionTest`（2 用例）全部通过。
+- **文档**：README（信创 DDL 路径 + 1.0.1 迁移提示）、design.md（§12.2/§12.4）、
+  decisions.md（D-029）。
+- **剩余**：RabbitMQ DLX/多级 TTL、consumer 多实例分区与死信重试、T1–T24 剩余高危用例。
+
+## 14. T1–T24 剩余高危用例补齐（iter-63，2026-11-02）
+
+- **范围**：落实「未实现」清单最后一项「覆盖 T1–T24 的剩余高危用例（§18.2）」。
+  纯测试迭代，不改生产代码。
+- **新增/补充用例（8 个）**：
+  - T2 指纹跨进程一致：`FingerprintsTest.shouldSurviveJsonRoundTrip`（JSON 往返→指纹不变）；
+  - T23 MQ 报文向后兼容：`NotifyEnvelopeCodecTest.shouldIgnoreUnknownFields`（同版本多未知字段被忽略）；
+  - T24 多接收人 fan-out 审计：`NotifyPipelineTest.shouldFanOutAuditForEveryReceiverAndChannel`（3 接收人 × 2 渠道 = 6 条审计）；
+  - T9 SpEL 字段缺失降级：`NotifyxAspectTest.shouldDegradeWhenSpelFieldMissing`（`#r` 引用不存在字段 → 放行 + 不告警）；
+  - T10 -parameters 缺失检测：新增 `SpelEvaluatorTest`（参数名退化 arg0 时 `#p0`/`#a0` 仍可求值、具名变量不可用、不抛异常）；
+  - T12 CallerRuns 禁用：`PriorityNotifyExecutorTest.shouldNotBlockCallerWhenQueueFull`（队列满 1000 次提交全部立即返回 <1s、无同步执行）；
+  - T14 Redis 降级不重复调用：`FallbackStoreTest.shouldNotRetryRedisWhileCircuitOpen`（熔断后不再触碰 Redis）；
+  - T16 优雅关闭不丢事件：`NotifyxLifecycleTest.shouldDrainAllQueuedTasksOnShutdown`（关闭时排空 100 个任务）；
+  - T20 SSRF 防护：`WebhookChannelTest.shouldBlockMetadataAddress`（169.254.169.254 被白名单拦截）。
+- **测试方法说明**：仓库无 SLF4J 日志捕获测试基础设施，T10/T14 的「warn 只打一次」用行为等价断言
+  （参数退化后位置变量仍可用 / 熔断打开后 Redis 不再被调用）；T10 用 JDK 动态代理构造切点，
+  不引入 Mockito 新依赖。
+- **N/A 确认**：T17（短信，sms4j 未在本交付实现）、T19（FreeMarker，实为自研 SimpleTemplateEngine）、
+  T22（Admin 多来源合并，Admin 未实现）——均不在 P0/P1 SDK 范围，仓库无对应模块。
+- **已覆盖确认**：T18（渠道错误码分类）已由 `WebhookChannelTest`（429/5xx/4xx/202）与
+  `EmailChannelTest`（认证/550/超时）覆盖，本次未重复。
+- **验证**：`mvn -B -ntp -pl <module> -am test -Dtest=... -Dsurefire.failIfNoSpecifiedTests=false`
+  全部通过（core 24、spring 19、autoconfigure 6、store-redis 4、webhook 19）。
+- **剩余**：RabbitMQ DLX/多级 TTL（iter-61）、consumer 多实例分区消费与死信重试（iter-62）——已于本次一并完成，见 §15。
+
+## 15. RabbitMQ DLX 退避重试与 consumer 死信（iter-61/62，2026-11-02）
+
+- **范围**：落实「未实现」清单最后两项：RabbitMQ 死信队列（DLX + 多级 TTL，§11.2）与
+  consumer 多实例分区消费 / 死信重试（§11.4）。
+- **producer 侧（iter-61）**：`RabbitMqBusProperties` 新增 `retry.{enabled,exchange}`（默认关，
+  与 D-014 行为类能力默认关一致）；`RabbitMqNotifyBus.ensureChannel()` 在开启时声明：
+  主队列挂 `x-dead-letter-exchange`、`direct` 死信交换、三级 TTL 重试队列
+  `{exchange}.5s/1m/5m`（各自 `x-message-ttl` + 死信回主队列）+ 绑定；关闭时声明与 1.0.0 一致。
+- **consumer 侧（iter-62）**：
+  - `ConsumerProperties` 补 `rabbitmq.{queue,retry-enabled,retry-exchange}`（原先 `@RabbitListener`
+    引用的 `notifyx.consumer.rabbitmq.queue` 键不存在，只靠默认值）；
+  - `IdempotencyStore` 新增 `default release(key)`，Memory/Redis/JDBC 三实现（消费失败进入重试前释放幂等键，
+    否则重投会被当作重复丢弃）；Jdbc 新增 `delete` 语句；
+  - `RabbitMqEnvelopeConsumer` 失败路径不再静默 ACK：重试开启且 `x-retry-count` 未达上限时释放幂等键 +
+    重投到重试交换（带 `x-retry-count+1`）；否则抛 `AmqpRejectAndDontRequeueException` 拒绝进入死信；
+  - 新增 `RabbitMqTopologyConfiguration`：声明与 producer 等价的 durable 主队列（重试开启时挂 DLX），
+    并声明死信交换 + 三级 TTL 重试队列与绑定（避免 `@RabbitListener` 自动声明参数不一致触发
+    `PRECONDITION_FAILED`）；`@RabbitListener` 改引用 `#{notifyxRabbitMainQueue.name}`。
+- **多实例分区**：Kafka 已按 `key=dedupeKey` 分区（iter-25）+ consumer 组 + 三档幂等（iter-26/27），
+  多实例同组即可分区消费；RabbitMQ 单队列多消费者不保序，重试依赖幂等收敛（§11.2 约定），
+  单实例起步推荐不变（D-023）。
+- **测试（新增 8 个）**：`RabbitMqNotifyBusTest.shouldDeclareRetryTopology`、
+  `RabbitMqEnvelopeConsumerTest`（重试重投 / 超限拒绝 / 关闭拒绝，3 个新增）、
+  `RabbitMqTopologyConfigurationTest`（3 个）、producer/consumer 既有用例全通过。
+- **验证**：`mvn -B -ntp -pl notifyx-bus-rabbitmq -am test`（3 用例）、
+  `mvn -B -ntp -pl notifyx-consumer -am test`（21 用例 + 1 live 跳过）均 BUILD SUCCESS。
+- **文档**：README / design.md（§11.2/§11.4）/ decisions.md（D-030）/ 迭代记录。
+- **未纳入**：真实 RabbitMQ 的 DLX 端到端冒烟（与 D-025/26 一致，需真实 broker，属 live 测试
+  `RabbitMqBusLiveTest` 扩展）；`notifyx.consumer.lag` 指标（§11.4 要求）——consumer 当前无
+  micrometer 依赖，lag 需真实 broker + 管理插件支撑，本轮文档化要求、留待有环境时落地。
+
+## 16. RabbitMQ 死信路由修复与 consumer 堆积指标（iter-64，2026-11-02）
+
+- **范围**：修复 iter-61/62 死信不可路由缺陷、兑现 §11.4 `notifyx.consumer.lag`、修复 Spotless 门禁。
+- **缺陷（ISSUE-053）**：主队列只有 `x-dead-letter-exchange`，缺 `x-dead-letter-routing-key` 且无死信队列，
+  重试耗尽后的拒绝消息 routing key 为队列名，与重试交换机绑定 `5s`/`1m`/`5m` 不匹配 → 被 broker 静默丢弃，
+  与 §11.2/§11.4「进入死信」不符。
+- **修复**：producer/consumer 双侧主队列补 `x-dead-letter-routing-key=dead`，新增 durable 死信队列
+  `{retry.exchange}.dead` 并绑定 routing key `dead`；退避重投复制原消息头，保留 `messageId`。
+- **lag 指标（D-031）**：`ConsumerProperties` 新增 `transport`（默认 `kafka`）；新增
+  `NotifyxConsumerLagMetrics`，存在 `MeterRegistry` 时注册 `notifyx.consumer.lag`（标签 `transport`/`queue`）：
+  RabbitMQ 取 `QUEUE_MESSAGE_COUNT`，Kafka 按分区 `endOffset - committedOffset` 求和（2s 有界）；
+  采样失败只 WARN 并沿用上次成功值；consumer 增加 `micrometer-core`（不加 actuator）。
+- **门禁**：6 个新增 Java 文件补齐文件末尾换行；`JdbcAuditRetention` Javadoc 去除「DM/Kingbase 待适配」；
+  README jar 版本示例修正为 1.0.1。
+- **验证**：`mvn -B -ntp clean verify` → BUILD SUCCESS，17/17 模块，372 用例（13 跳过），
+  Spotless/Checkstyle/JaCoCo 全绿；consumer 28 用例、bus-rabbitmq 6 用例。
+- **剩余**：真实 broker 的 DLX 端到端冒烟（live）；Kafka lag 真实集群校准（含 SSL bundle 注入）；
+  §5 的待用户决策项（A02/A03/A04/A07）。

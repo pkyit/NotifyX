@@ -438,3 +438,81 @@
   `max-attempts` 调大。内置渠道默认值不变（3 / 3）。
 - **复审条件**：出现「渠道必须独立于全局配置增加重试」的硬需求时，增加显式的
   渠道级 override 开关，而不是恢复「渠道优先」。
+
+## D-029 `nx_audit.level` 改名 `event_level`（信创保留字规避，破坏性）
+
+- **日期**：2026-11-02（iter-60）
+- **状态**：生效
+- **背景**：设计书 §12.4 指出 `level` 是人大金仓（KingbaseES）保留字，并明确建议
+  「改名为 `event_level`，从根上规避，而不是加引号」。进一步实测确认：加双引号
+  `"level"` 这一备选方案在 MySQL 下不可行——MySQL 默认把双引号当字符串字面量，
+  列名位置书写 `"level"` 会报语法错（除非全局开 `ANSI_QUOTES`，不可控）。因此
+  加引号无法做到跨库一致，改名是唯一能同时服务 MySQL/PG/H2/DM/Kingbase/openGauss
+  的方案。
+- **决策**：在 1.0.1 候选阶段，将 `nx_audit.level` 统一改名为 `nx_audit.event_level`，
+  `JdbcAuditRecorder` INSERT 与 mysql/postgresql/h2/dm/kingbase/opengauss 六套 DDL 同步更新。
+- **理由**：信创适配（DM/Kingbase/openGauss）是 iter-60 的核心交付，`level` 保留字
+  必须处理；改名相对加引号是维护成本最低、跨库最稳的做法，也是设计书明确推荐。
+- **影响**：**破坏性变更**——已基于 1.0.0 旧 schema（`level` 列）建表的用户，升级 1.0.1
+  需执行 `alter table nx_audit rename column level to event_level`（或按新 DDL 重建表）。
+  `nx_scene_config.level` 属 Admin（P4）未落地，不受影响，落地时沿用新命名。
+- **复审条件**：1.0.1 正式发布说明中必须写入本迁移提示；无其它复审条件。
+
+## D-030 RabbitMQ DLX 退避重试：producer/consumer 双侧声明等价拓扑
+
+- **日期**：2026-11-02（iter-61/62）
+- **状态**：生效
+- **supersedes**：D-025 第 4 点（producer 暂不声明 DLX）、D-026 第 4/5 点（consumer 假定队列已存在、DLX/重试不在本轮）。
+- **背景**：§11.2 要求 RabbitMQ 用 `x-dead-letter-exchange` + 多级 TTL 队列（`retry.5s`/`retry.1m`/`retry.5m`）
+  实现退避重试。D-025/D-026 当时把 DLX 与重试推迟到 consumer 落地后，现在 consumer 已就绪，兑现该承诺。
+  同时发现一个坑：若 producer 声明的队列 args 与 spring-amqp 的 `@RabbitListener` 自动声明不一致，
+  RabbitMQ 会报 `PRECONDITION_FAILED - inequivalent arg 'x-dead-letter-exchange'`。
+- **决策**：
+  1. **双侧声明等价拓扑**：producer（`RabbitMqNotifyBus.declareTopology`）与 consumer
+     （`RabbitMqTopologyConfiguration`）各自声明同一套资源——主队列（启用重试时带
+     `x-dead-letter-exchange`）+ `direct` 重试交换机 + 3 级 TTL 队列（`retry.5s`/`retry.1m`/`retry.5m`，
+     每级 `x-message-ttl` + `x-dead-letter-exchange=""` + `x-dead-letter-routing-key=主队列`）；
+  2. TTL 级别固定 3 级（5s/1m/5m），不为每次重试动态建队列（§11.2 明确约束）；
+  3. 退避计数用消息头 `x-retry-count`，producer 发布默认不带头（0），consumer 重投时 `+1`，
+     两侧共用同一常量，语义一致；
+  4. consumer 处理失败时：`retryEnabled` 且 `retryCount < 3` → 先 `IdempotencyStore.release(key)`
+     释放幂等键（否则重投会被当重复 ACK 丢弃），再 `basicPublish` 回重试交换机（routing key=级别）
+     ACK 原消息；否则抛 `AmqpRejectAndDontRequeueException` 进入死信；
+  5. `@RabbitListener(queues = "#{notifyxRabbitMainQueue.name}")` 引用 Queue bean，
+     避免 spring-amqp 自动声明与 producer 声明 args 不一致触发 `PRECONDITION_FAILED`；
+  6. `notifyx.consumer.lag` 指标（§11.4）本轮不实现，原因记录在 STATE.md §15（consumer 无
+     micrometer 依赖，lag 需真实 broker + 管理插件）。
+- **理由**：双侧声明等价拓扑是规避 `PRECONDITION_FAILED` 的稳妥做法——只要两套声明语义一致，
+  谁先声明都能兼容；消息头承载重试计数比队列数量外推更精确，且天然支持「已达上限进入死信」。
+- **影响**：启用重试后 RabbitMQ 会多 1 交换 + 3 队列 + 3 绑定；producer 每次建连需声明全部拓扑
+  （幂等 `queueDeclare`/`exchangeDeclare`，重复声明不改现状）；consumer 幂等键在重试期间被
+  释放，重投阶段存在极短窗口内同键重复投递被幂等拦住的风险（可接受，靠 `firstSeen` 兜底）。
+- **复审条件**：出现「按异常类型差异化退避级别」需求时，扩展 `x-retry-count` 与级别映射；
+  RocketMQ 落地时用延迟级别替代本链路（§11.2 推荐）。
+- **补充（iter-64，2026-11-02）**：复查发现原拓扑只设置 `x-dead-letter-exchange`，缺少
+  `x-dead-letter-routing-key` 且没有死信队列；主队列消息 routing key 是队列名，与重试交换机绑定的
+  `5s`/`1m`/`5m` 不匹配，导致「进入死信」实际被 broker 静默丢弃。已在 producer/consumer 双侧补齐
+  `x-dead-letter-routing-key=dead` 与 durable 死信队列 `{exchange}.dead`（routing key `dead`），
+  第 1 点资源清单相应增加 1 队列 + 1 绑定；第 6 点由 D-031 兑现。
+
+## D-031 consumer 堆积指标 `notifyx.consumer.lag` 的实现取舍
+
+- **日期**：2026-11-02（iter-64）
+- **状态**：生效
+- **背景**：设计书 §11.4/§15.1 要求暴露 `notifyx.consumer.lag`，但 iter-62 因 consumer 无 micrometer
+  依赖、lag 依赖 broker 管理插件而挂账（D-030 第 6 点、STATE §15）。
+- **决策**：
+  1. consumer 增加 `io.micrometer:micrometer-core`（版本由 Spring Boot BOM 管理），但**不**引入
+     `spring-boot-starter-actuator`；仅当容器中存在 `MeterRegistry` 时注册 gauge，避免强制改变部署形态；
+  2. 指标名 `notifyx.consumer.lag`，标签仅 `transport`（kafka|rabbitmq）与 `queue`（RabbitMQ 队列名 /
+     Kafka topic），禁止 receiver/bizId/eventId 等高基数标签（AGENTS 红线）；
+  3. RabbitMQ 采样走 AMQP `Queue.DeclareOk` 返回的消息数（`RabbitAdmin.getQueueProperties`），
+     不依赖 management 插件；
+  4. Kafka 采样走 AdminClient：按分区 `endOffset - committedOffset` 求和（committed 缺失按 0），
+     每次调用 2s 有界超时；AdminClient 懒创建、随组件销毁关闭；
+  5. 采样失败只 WARN 并沿用上次成功值（初始 0），绝不影响 `onMessage`。
+- **理由**：gauge 由 Prometheus 抓取时按需采样，不需要后台线程（与「SDK 不内置后台线程」一致）；
+  队列消息数与消费者组位点差是两种传输最贴近「积压」的低成本定义，且都不需要额外插件。
+- **影响**：consumer fat jar 增加 micrometer-core；未提供 `MeterRegistry` 的部署看不到该指标（只记 debug）。
+  Kafka 采样每次抓取最多 3 次 Admin 调用（describeTopics / listOffsets / listConsumerGroupOffsets）。
+- **复审条件**：接入 Prometheus 实测抓取超时压力时，可改为按 TTL 缓存采样；支持 RocketMQ 时新增 transport 分支。

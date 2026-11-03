@@ -24,7 +24,7 @@
 ## 常用命令
 
 ```bash
-mvn -B -ntp clean verify                         # 全量构建 + 186 个测试 + Spotless/Checkstyle/JaCoCo
+mvn -B -ntp clean verify                         # 全量构建 + 全部测试 + Spotless/Checkstyle/JaCoCo
 mvn -pl <module> -am test                        # 只测指定模块及其依赖
 mvn -pl <module> -am -Dtest=<TestClass> test     # 只跑一个测试类
 mvn -pl notifyx-sample spring-boot:run           # 启动示例；需先 mvn install

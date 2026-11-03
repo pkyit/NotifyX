@@ -1907,6 +1907,19 @@ notifyx:
 
 **RocketMQ 延迟级别的优势值得强调**：其他两种 MQ 要做退避重试，都需要自建延迟队列或死信队列链，代码量和运维复杂度都不小。RocketMQ 的 18 个固定延迟级别正好覆盖退避需求（1s→10m），`message.setDelayTimeLevel(level)` 一行搞定。因此**如果用户环境有 RocketMQ，优先推荐它**。
 
+**RabbitMQ 退避重试落地（iter-61/62）**：已按上表兑现 DLX + 多级 TTL 重试，具体契约如下（详见 D-030）：
+
+- 拓扑：主队列（`notifyx.bus.rabbitmq.queue`，启用重试时带 `x-dead-letter-exchange=重试交换机`
+  + `x-dead-letter-routing-key=dead`）→ 重试交换机 `notifyx.retry`（direct）→
+  3 级 TTL 队列 `notifyx.retry.5s`（5s）/`notifyx.retry.1m`（60s）/`notifyx.retry.5m`（300s），
+  每级队列 `x-message-ttl` + `x-dead-letter-exchange=""` + `x-dead-letter-routing-key=主队列`（到期回主队列）；
+  另有 durable 死信队列 `notifyx.retry.dead`，以 routing key `dead` 绑定到重试交换机。
+- 计数：消息头 `x-retry-count`，producer 发布默认 0，consumer 每次退避重投 `+1`；`retryCount >= 3` 时不再退避，
+  抛 `AmqpRejectAndDontRequeueException`，由 broker 死信到 `notifyx.retry.dead`（不会静默丢弃）。
+- 配置：producer `notifyx.bus.rabbitmq.retry.enabled` / `notifyx.bus.rabbitmq.retry.exchange`；consumer
+  `notifyx.consumer.rabbitmq.retry-enabled` / `notifyx.consumer.rabbitmq.retry-exchange`。两侧需保持一致，
+  且 producer 与 consumer 各自声明等价拓扑（幂等，规避 `PRECONDITION_FAILED`）。
+
 ### 11.3 producer-only 模式的边界
 
 SDK 侧只做三件事：
@@ -1937,9 +1950,16 @@ MQ topic ──→ consumer ──→ 幂等检查 ──→ 完整责任链（�
 | 有 DB | `nx_idempotency` 表 + 唯一索引，插入冲突即视为重复 |
 | 都没有 | ⚠️ 内存 LRU（**会在重启后失效**），文档必须警告「无持久化幂等存储时，consumer 重启可能导致重复发送」 |
 
+**RabbitMQ 死信/重试语义（iter-62）**：consumer 在 `retryEnabled` 且 `x-retry-count < 3` 时，
+先 `IdempotencyStore.release(key)` 释放幂等键，再把原消息 `basicPublish` 回重试交换机（routing key =
+`5s`/`1m`/`5m`，复制原消息头并保留 `messageId`）并 ACK；否则抛 `AmqpRejectAndDontRequeueException`，
+由 broker 按主队列 `x-dead-letter-exchange` + `x-dead-letter-routing-key=dead` 投递到
+`notifyx.retry.dead`。重试期间幂等键被释放，`firstSeen` 在每次重投时重新裁决，
+避免「失败重投被当重复丢弃」。详见 D-030。
+
 **consumer 的部署形态**：单实例（最简，天然无重复）或多实例 + 分区消费（Kafka 按 key 分区，同 `dedupeKey` 必到同一 consumer）。**推荐单实例起步**——通知量通常不需要横向扩展，单实例能彻底规避分布式协调问题。
 
-**consumer 自身的高可用**：consumer 挂了，消息在 MQ 里堆积不丢（这正是引入 MQ 的价值）。恢复后自动消费积压。但需注意 **积压告警**：`notifyx.consumer.lag` 指标必须暴露，堆积超过阈值时……用 NotifyX 自己告警（dogfooding，但要走**独立的告警通道**，避免自己依赖自己形成循环——具体做法是 consumer 的堆积告警直接写日志 + Prometheus 指标，由 Prometheus 侧配规则告警）。
+**consumer 自身的高可用**：consumer 挂了，消息在 MQ 里堆积不丢（这正是引入 MQ 的价值）。恢复后自动消费积压。但需注意 **积压告警**：`notifyx.consumer.lag` 指标必须暴露（iter-64 已实现：consumer 依赖 `micrometer-core`，存在 `MeterRegistry` 时注册 gauge，标签 `transport`/`queue`；RabbitMQ 取主队列 `QUEUE_MESSAGE_COUNT`，Kafka 按分区 `endOffset - committedOffset` 求和，采样失败降级为上次成功值；部署方加 `spring-boot-starter-actuator` 即可经 Prometheus 端点暴露），堆积超过阈值时……用 NotifyX 自己告警（dogfooding，但要走**独立的告警通道**，避免自己依赖自己形成循环——具体做法是 consumer 的堆积告警直接写日志 + Prometheus 指标，由 Prometheus 侧配规则告警）。
 
 ### 11.5 多实例重复发送：选型表（README 必备章节）
 
@@ -2074,7 +2094,7 @@ create table nx_audit (
     id            bigint       not null primary key,
     event_id      varchar(64)  not null,
     scene         varchar(64),
-    level         varchar(16),
+    event_level   varchar(16),                        -- ★ 已由 level 改名，规避金仓保留字（§12.4）
     biz_id        varchar(128),
     channel       varchar(32),
     receiver      varchar(256),                        -- ★ 脱敏后存储，见 §16.2
@@ -2166,6 +2186,10 @@ create table nx_failure_record (
 | 索引内联 `index idx_xxx(a,b)` | DM 不支持建表内联索引 | **独立 `create index` 语句** |
 
 **关于 `level` 列名的特别提醒**：`nx_audit.level` 和 `nx_scene_config.level` 都用了 `level`——这在金仓里是保留字。**建议改名为 `event_level`**，从根上规避，而不是靠加引号（加引号后 MyBatis 的手写 SQL 处处要小心，维护成本高）。这是本文档对讨论稿表设计的一处具体修正。
+
+> 落实状态（iter-60，1.0.1）：`nx_audit.level` 已在 JDBC 存储模块统一改名为 `event_level`
+> （代码 SQL 与 mysql/postgresql/h2/dm/kingbase/opengauss 各库 DDL 同步）。`nx_scene_config`
+> 属 Admin（P4）范畴，落地时一并沿用 `event_level` 命名。
 
 ### 12.5 诚实声明（必须写进 README）
 

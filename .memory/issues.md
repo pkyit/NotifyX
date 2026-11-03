@@ -513,3 +513,16 @@
   `shouldFailFastWhenTemplateEngineMismatch` / `shouldFailFastWhenRedisDedupeMismatch`。
 - **关闭方式**：`NotifyxDiagnostics.afterPropertiesSet()` 增加 store/engine 一致性检查；
   仅 `fail-fast=true` 时抛 `IllegalStateException`，默认 false 仍只提示。
+
+## ISSUE-053 RabbitMQ 重试耗尽的消息无法路由到死信，被 broker 静默丢弃
+- **状态**：CLOSED（iter-64）
+- **现象**：iter-61/62 声明的主队列只带 `x-dead-letter-exchange=notifyx.retry`，既无
+  `x-dead-letter-routing-key` 也未声明死信队列；主队列消息 routing key 是队列名（默认
+  `notifyx-events`），而重试 direct exchange 只绑定 `5s`/`1m`/`5m`，因此
+  `AmqpRejectAndDontRequeueException` 触发的死信投递无匹配绑定，消息被丢弃，
+  与设计书 §11.2/§11.4「进入死信」不符。
+- **证据**：`RabbitMqNotifyBus.declareTopology` 修复前 `args` 仅含 `x-dead-letter-exchange`；
+  `RabbitMqTopologyConfigurationTest.shouldDeclareMainQueueWithDlx` 修复前不校验
+  `x-dead-letter-routing-key`（修复后断言 `.containsEntry("x-dead-letter-routing-key", "dead")`）。
+- **关闭方式**：producer/consumer 双侧主队列补 `x-dead-letter-routing-key=dead`，声明 durable
+  死信队列 `{retry.exchange}.dead` 并绑定 routing key `dead`；重投时复制原消息头（保留 `messageId`）。
