@@ -558,7 +558,7 @@
 ## D-034 FailedRecord recordId 升级为 `eventId:channel`，并将 dedupe release 限定为「全部失败」
 
 - **日期**：2026-11-04（iter-68）
-- **状态**：生效
+- **状态**：生效（recordId 粒度结论已被 D-036 调整：追加 receiver 摘要）
 - **背景**（A02/A03）：
   1. `FailedRecord.recordId` 只用 eventId，多渠道 fan-out 后 `LocalFileFailureStore` 后写覆盖先写、
      `InMemoryFailureStore.updateStatus/requeue` 只 filter 第一条，补偿器无法知道失败的是哪个 channel。
@@ -598,3 +598,26 @@
   反模式，未见真实依赖；设计书 §6.2 明确要求"fail-fast 校验"。
 - **复审条件**：启动时 fail-fast 校验 scene.channels 是否至少有一个可用渠道（目前只做了运行时返回失败，
   启动校验可作为后续增强）。
+
+## D-036 recordId 追加 receiver 短摘要（调整 D-034 的"不做 receiver 粒度"结论）
+
+- **日期**：2026-11-04（iter-69 引入脱敏明文，iter-70 改为 SHA-256 前 16 位 hex 摘要）
+- **状态**：生效（supersedes D-034 中"不做完整粒度（channel + receiver）"的理由条款；
+  D-034 的 dedupe release 结论不受影响）
+- **背景**：代码评估报告复核发现，`persistFailure` 实际按**收件人粒度**调用（`sendOne` 逐 receiver），
+  D-034 的 `eventId:channel` 主键导致同事件同渠道多收件人失败时后写覆盖先写：
+  - `LocalFileFailureStore.writeAtomically` 使用 `REPLACE_EXISTING`，先失败收件人的记录被覆盖丢失；
+  - JDBC 严格模式下主键冲突插入失败，`persistFailure` 只捕获 `RuntimeException` 打 warn，记录静默丢失。
+  D-034 担心的"补偿复杂度"实际由 D-032 的 replay 豁免去重 + at-least-once 语义消化。
+- **决策**：
+  1. `recordId = eventId:channel:sha256(receiver)[0:16]`（receiver 为空时省略摘要段）；
+  2. 总长超过 `RECORD_ID_MAX_LENGTH=64`（对齐 6 个方言 DDL 的 `record_id varchar(64)`）时，
+     退化为 `sha256(eventId)[:16]:sha256(channel)[:16]:receiverDigest` 整体压缩，确保必然可入库；
+  3. 不使用脱敏明文：脱敏值歧义性会引入碰撞（多个收件人脱敏成同一形态），且长度不可控。
+- **理由**：
+  - 摘要（而非明文/脱敏值）同时满足：长度可控、无碰撞歧义、不落收件人原文（脱敏红线）；
+  - 16 hex = 64bit，同事件同渠道下的碰撞概率可忽略；
+  - 补偿语义不变：每条记录仍整事件重投，重复投递由去重/幂等兜底（设计书 §9.9 at-least-once）。
+- **影响**：同一事件同渠道 N 个收件人失败会产生 N 条补偿记录（D-034 曾担心此复杂度）；
+  实测补偿器按记录独立处理，replay 豁免去重，无功能回归（`FailurePersistenceTest` 覆盖）。
+- **复审条件**：若补偿器引入"按 receiver 定向重投"或记录合并策略，重新评估摘要粒度。

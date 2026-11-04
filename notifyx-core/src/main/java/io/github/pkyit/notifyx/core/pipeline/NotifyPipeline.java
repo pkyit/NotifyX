@@ -1,5 +1,8 @@
 package io.github.pkyit.notifyx.core.pipeline;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,6 +56,12 @@ import io.github.pkyit.notifyx.core.support.NotifyEnvelopeCodec;
 public final class NotifyPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(NotifyPipeline.class);
+
+    /** 失败记录主键长度上限，对齐 JDBC 各方言 {@code record_id varchar(64)} 列宽。 */
+    private static final int RECORD_ID_MAX_LENGTH = 64;
+
+    /** 收件人摘要的十六进制长度（16 位 = 64bit，同事件同渠道下碰撞概率可忽略）。 */
+    private static final int RECEIVER_DIGEST_HEX_LENGTH = 16;
 
     private final SceneRegistry sceneRegistry;
     private final List<EventFilter> filters;
@@ -331,7 +340,9 @@ public final class NotifyPipeline {
                     continue;
                 }
                 if (result.status() == SendResult.Status.FAIL_NON_RETRYABLE) {
-                    // 数据类错误（收件人地址错、参数非法）不计熔断，避免误伤整体渠道
+                    // 数据类错误（收件人地址错、参数非法）不计熔断，避免误伤整体渠道；
+                    // 但半开探测标记必须释放，否则探测恰好命中不可重试结果时熔断器永久卡在半开
+                    breaker.neutralProbeRelease();
                     break;
                 }
                 // 渠道主动抑制（SUPPRESSED/DEDUPED/RATE_LIMITED/CIRCUIT_OPEN）不计熔断成功或失败
@@ -339,8 +350,13 @@ public final class NotifyPipeline {
                 breaker.neutralProbeRelease();
                 break;
             } catch (ChannelException ex) {
-                breaker.recordFailure();
                 boolean retryable = isRetryable(channel, ex);
+                if (retryable) {
+                    breaker.recordFailure();
+                } else {
+                    // 与 FAIL_NON_RETRYABLE 结果口径统一：不可重试异常不计熔断，中性释放探测标记
+                    breaker.neutralProbeRelease();
+                }
                 if (!retryable || attempt >= maxAttempts) {
                     result = retryable
                             ? SendResult.retryable(ex.getMessage(), elapsed(started))
@@ -434,14 +450,13 @@ public final class NotifyPipeline {
                 log.debug("envelope serialization failed: {}", codecFailure.toString());
                 envelopeJson = event.eventId();
             }
-            // recordId 必须含脱敏后的 receiver，否则多收件人同一渠道会互相覆盖
+            // recordId 必须区分 receiver，否则多收件人同一渠道会互相覆盖；
+            // 使用收件人的稳定短摘要而非明文/脱敏值：长度可控（JDBC record_id 为 varchar(64)），
+            // 且避免脱敏值歧义性导致的碰撞
+            String recordId = buildRecordId(event.eventId(), channel, receiver);
             String maskedReceiver = receiver;
             if (receiver != null && maskEnabled && masker != null) {
                 maskedReceiver = masker.maskReceiver(receiver);
-            }
-            String recordId = event.eventId() + ":" + channel;
-            if (maskedReceiver != null && !maskedReceiver.isBlank()) {
-                recordId = recordId + ":" + maskedReceiver;
             }
             FailedRecord record = new FailedRecord(recordId, RecordStatus.PENDING, 0, envelopeJson,
                     channel, String.valueOf(result.failureReason()), attempts, now, now + 60_000L);
@@ -449,6 +464,40 @@ public final class NotifyPipeline {
             log.warn("event persisted for compensation eventId={} channel={} receiver={}", event.eventId(), channel, maskedReceiver);
         } catch (RuntimeException ex) {
             log.warn("failed to persist failure record: {}", ex.toString());
+        }
+    }
+
+    /**
+     * 构造失败记录主键：{@code eventId:channel[:receiverDigest]}。
+     *
+     * <p>收件人参与主键以避免同事件同渠道多收件人互相覆盖；使用稳定短摘要而非明文，
+     * 保证长度不超过 JDBC {@code record_id varchar(64)} 列宽，且不泄露收件人原文。</p>
+     */
+    private static String buildRecordId(String eventId, String channel, String receiver) {
+        String recordId = eventId + ":" + channel;
+        if (receiver != null && !receiver.isBlank()) {
+            recordId = recordId + ":" + shortDigest(receiver);
+        }
+        if (recordId.length() <= RECORD_ID_MAX_LENGTH) {
+            return recordId;
+        }
+        // 防御：eventId 或渠道名异常超长时整体摘要压缩，确保可入库
+        String tail = (receiver == null || receiver.isBlank()) ? "" : ":" + shortDigest(receiver);
+        return shortDigest(eventId) + ":" + shortDigest(channel) + tail;
+    }
+
+    private static String shortDigest(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(RECEIVER_DIGEST_HEX_LENGTH);
+            for (int i = 0; i < RECEIVER_DIGEST_HEX_LENGTH / 2; i++) {
+                hex.append(Character.forDigit((bytes[i] >> 4) & 0xF, 16));
+                hex.append(Character.forDigit(bytes[i] & 0xF, 16));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 not available", ex);
         }
     }
 

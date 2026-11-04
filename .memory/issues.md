@@ -635,3 +635,23 @@
   - N-9 文档化：`KafkaNotifyBus` 类 Javadoc、design §11.2、README MQ 模式明示同步等待
     broker 确认（最长 `delivery-timeout`，默认 10s）及其 producer-only 取舍。
   - 详见 `.memory/iterations/2026-11-03-iter-66-issue-060-remainder.md`。
+
+## ISSUE-061 代码评估报告遗留项（4.4/4.5/4.6 与去重保守拒绝）
+- **状态**：OPEN（2026-11-04 登记，iter-69/70 修复同报告 4.1/4.2/4.3 后的遗留）
+- **清单与证据**：
+  1. 4.4 重试 `Thread.sleep` 占用工作线程：`NotifyPipeline.java` sendOne 重试路径
+     `sleep(retryPolicy.delayAfter(...))`（2s→4s→8s 指数退避）在优先级队列工作线程内阻塞，
+     CRITICAL 事件会被前面正在 sleep 的重试任务卡住。修复需 `NotifyTaskExecutor` SPI 增加
+     延迟调度能力 + 重试循环异步化（SPI 级改动）。
+  2. 4.5 队列溢出/停机丢弃无落盘：`PriorityNotifyExecutor.java` 队列满分支与 `shutdownNow`
+     丢弃分支只有 `metrics.queueDiscarded` + warn 日志，无 FailureStore 引用；
+     `PriorityTask` 只携带 Runnable，落盘需要完整 NotifyEnvelope。
+  3. 4.6 去重指纹对易变参数敏感：`Fingerprints.canonicalParams` 把所有 params 纳入指纹，
+     业务方传入时间戳/流水号等易变值时去重失效。属使用面问题，需文档警示或可选指纹字段白名单。
+  4. 去重限频窗口内保守拒绝（iter-70 引入，已文档化为溢出策略）：`MemoryDedupeStore`
+     容量打满时按 `EVICT_INTERVAL_MILLIS=100ms` 限频清理，窗口内即使有刚过期条目也直接拒绝，
+     属有界溢出的刻意取舍。
+- **影响**：4.4/4.5 违背「异步路径有界、可关闭、可观测」与「不把内存当可靠存储」红线的精神，
+  但当前 T0 规模下概率性触发；4.6 为使用面风险。
+- **建议**：4.4+4.5 合并为一个迭代（`feat/async-retry-and-overflow-store`），涉及
+  `NotifyTaskExecutor` SPI、`PriorityTask` 结构与 autoconfigure 装配；4.6 先补 README 警示。

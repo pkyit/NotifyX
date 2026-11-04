@@ -100,6 +100,43 @@ class FailurePersistenceTest {
         assertThat(store.records).isEmpty();
     }
 
+    @Test
+    @DisplayName("同事件同渠道多收件人失败时各自落盘，recordId 互不覆盖")
+    void shouldPersistDistinctRecordPerReceiver() {
+        NotifyPipeline pipeline = pipeline(1);
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A")
+                .level(Level.ERROR)
+                .bizId("B1")
+                .receivers(List.of("alice@example.com", "bob@example.com"))
+                .build());
+
+        assertThat(store.records).hasSize(2);
+        assertThat(store.records.get(0).recordId())
+                .isNotEqualTo(store.records.get(1).recordId());
+    }
+
+    @Test
+    @DisplayName("recordId 长度不超过 JDBC record_id varchar(64) 列宽，超长收件人亦然")
+    void shouldKeepRecordIdWithinColumnLimit() {
+        NotifyPipeline pipeline = pipeline(1);
+        String longReceiverA = "a.very.long.email.address." + "x".repeat(60) + "@example.com";
+        String longReceiverB = "another.extremely.long.webhook.target." + "y".repeat(60) + "@example.com";
+
+        pipeline.handle(NotifyEvent.builder("SCENE_A")
+                .level(Level.ERROR)
+                .bizId("B1")
+                .receivers(List.of(longReceiverA, longReceiverB))
+                .build());
+
+        assertThat(store.records).hasSize(2);
+        assertThat(store.records.get(0).recordId().length()).isLessThanOrEqualTo(64);
+        assertThat(store.records.get(1).recordId().length()).isLessThanOrEqualTo(64);
+        assertThat(store.records.get(0).recordId())
+                .as("不同收件人摘要不得碰撞")
+                .isNotEqualTo(store.records.get(1).recordId());
+    }
+
     private NotifyPipeline pipeline(int maxAttempts) {
         return pipeline(maxAttempts, false);
     }

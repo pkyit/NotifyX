@@ -69,4 +69,28 @@ class CircuitBreakerTest {
         breaker.recordFailure();
         assertThat(breaker.remainingOpenMillis()).isBetween(1L, 150L);
     }
+
+    @Test
+    @DisplayName("半开探测被中性释放后可再次探测，状态保持半开")
+    void shouldAllowProbeAgainAfterNeutralRelease() throws Exception {
+        CircuitBreaker breaker = new CircuitBreaker(1, Duration.ofMillis(30), Duration.ofMillis(200));
+        breaker.recordFailure();
+        Thread.sleep(60);
+        assertThat(breaker.allowRequest()).isTrue();
+        assertThat(breaker.allowRequest()).as("probe in flight").isFalse();
+
+        breaker.neutralProbeRelease();
+
+        assertThat(breaker.state()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
+        assertThat(breaker.allowRequest()).as("probe released").isTrue();
+    }
+
+    @Test
+    @DisplayName("关闭状态下中性释放是无害空操作")
+    void neutralReleaseInClosedStateIsNoOp() {
+        CircuitBreaker breaker = new CircuitBreaker(2, Duration.ofMillis(30), Duration.ofMillis(200));
+        breaker.neutralProbeRelease();
+        assertThat(breaker.state()).isEqualTo(CircuitBreaker.State.CLOSED);
+        assertThat(breaker.allowRequest()).isTrue();
+    }
 }
