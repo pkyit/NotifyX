@@ -23,6 +23,12 @@ import io.github.pkyit.notifyx.core.support.NotifyEnvelopeCodec;
  * <p>{@code acks=all} + {@code enable.idempotence=true}；发送失败抛 {@link BusException}，
  * 由 {@code MqNotifyKit} 落盘兜底。</p>
  *
+ * <p><b>同步语义</b>：{@link #publish(NotifyEnvelope)} 会等待
+ * {@code producer.send(record).get(deliveryTimeout)}，调用线程最长阻塞
+ * {@code notifyx.bus.kafka.delivery-timeout}（默认 10s）。这是 producer-only 的刻意取舍：
+ * 只有拿到 broker 确认才能把失败精确写入 {@code FailureStore}。若业务线程无法接受该阻塞，
+ * 应使用 local 模式，或由接入方把发送放进自己的异步线程池。</p>
+ *
  * <p>@implNote 线程安全；{@link #close()} 幂等。</p>
  *
  * @since 1.0
