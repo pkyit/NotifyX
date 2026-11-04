@@ -331,10 +331,12 @@ public final class NotifyPipeline {
                     continue;
                 }
                 if (result.status() == SendResult.Status.FAIL_NON_RETRYABLE) {
-                    breaker.recordFailure();
+                    // 数据类错误（收件人地址错、参数非法）不计熔断，避免误伤整体渠道
                     break;
                 }
                 // 渠道主动抑制（SUPPRESSED/DEDUPED/RATE_LIMITED/CIRCUIT_OPEN）不计熔断成功或失败
+                // 半开探测必须释放标记，否则会永久卡死
+                breaker.neutralProbeRelease();
                 break;
             } catch (ChannelException ex) {
                 breaker.recordFailure();
@@ -375,7 +377,7 @@ public final class NotifyPipeline {
                 || result.status() == SendResult.Status.FAIL_NON_RETRYABLE
                 || result.status() == SendResult.Status.CIRCUIT_OPEN;
         if (failed) {
-            persistFailure(event, channel.name(), result, attemptsUsed, dedupeKey);
+            persistFailure(event, channel.name(), receiver, result, attemptsUsed, dedupeKey);
             notifyOnError(event, result);
         } else if (result.status() == SendResult.Status.SUCCESS) {
             notifyOnSuccess(event);
@@ -388,7 +390,7 @@ public final class NotifyPipeline {
         // 渲染在渠道调用之前失败，因此真实渠道尝试次数为 0。
         audit(event, level, channel.name(), receiver, result, Duration.ZERO, 0);
         metrics.sendResult(channel.name(), event.scene(), result.status(), Duration.ZERO);
-        persistFailure(event, channel.name(), result, 0, dedupeKey);
+        persistFailure(event, channel.name(), receiver, result, 0, dedupeKey);
         notifyOnError(event, result);
         return true;
     }
@@ -413,7 +415,7 @@ public final class NotifyPipeline {
         }
     }
 
-    private void persistFailure(NotifyEvent event, String channel, SendResult result, int attempts, String dedupeKey) {
+    private void persistFailure(NotifyEvent event, String channel, String receiver, SendResult result, int attempts, String dedupeKey) {
         if (failureStore == null || event.isReplay()) {
             return;
         }
@@ -432,10 +434,19 @@ public final class NotifyPipeline {
                 log.debug("envelope serialization failed: {}", codecFailure.toString());
                 envelopeJson = event.eventId();
             }
-            FailedRecord record = new FailedRecord(event.eventId() + ":" + channel, RecordStatus.PENDING, 0, envelopeJson,
+            // recordId 必须含脱敏后的 receiver，否则多收件人同一渠道会互相覆盖
+            String maskedReceiver = receiver;
+            if (receiver != null && maskEnabled && masker != null) {
+                maskedReceiver = masker.maskReceiver(receiver);
+            }
+            String recordId = event.eventId() + ":" + channel;
+            if (maskedReceiver != null && !maskedReceiver.isBlank()) {
+                recordId = recordId + ":" + maskedReceiver;
+            }
+            FailedRecord record = new FailedRecord(recordId, RecordStatus.PENDING, 0, envelopeJson,
                     channel, String.valueOf(result.failureReason()), attempts, now, now + 60_000L);
             failureStore.save(record);
-            log.warn("event persisted for compensation eventId={} channel={}", event.eventId(), channel);
+            log.warn("event persisted for compensation eventId={} channel={} receiver={}", event.eventId(), channel, maskedReceiver);
         } catch (RuntimeException ex) {
             log.warn("failed to persist failure record: {}", ex.toString());
         }
