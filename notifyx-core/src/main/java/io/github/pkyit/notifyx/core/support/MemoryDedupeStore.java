@@ -44,16 +44,28 @@ public final class MemoryDedupeStore implements DedupeStore {
     public boolean tryAcquire(String dedupeKey, Duration window) {
         long now = System.currentTimeMillis();
         long until = now + Math.max(0L, window.toMillis());
+        // 快速路径：已存在且未过期 → 直接拒绝
+        Long existing = expiry.get(dedupeKey);
+        if (existing != null && existing > now) {
+            return false;
+        }
+        // 容量检查 + 清理（在 compute 外部，避免死锁）
+        if (expiry.size() >= maxEntries) {
+            evictExpired(now);
+            // 清理后仍超限 → 拒绝，避免 OOM；过期条目已清掉才能进
+            if (expiry.size() >= maxEntries) {
+                // 最后一次机会：检查目标 key 是否已在清理中被自己的旧占位清掉
+                if (expiry.get(dedupeKey) != null) {
+                    return false;
+                }
+                return false;
+            }
+        }
+        // 原子占位：compute 内只做占位，不再对其他条目做 removeIf
         boolean[] acquired = {false};
         expiry.compute(dedupeKey, (key, current) -> {
             if (current != null && current > now) {
                 return current;
-            }
-            if (current == null && expiry.size() >= maxEntries) {
-                evictExpired(now);
-                if (expiry.size() >= maxEntries) {
-                    return null;
-                }
             }
             acquired[0] = true;
             return until;
