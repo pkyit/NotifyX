@@ -668,7 +668,19 @@ public class NotifyxProperties {
     public static class Dedupe {
         private boolean enabled = true;
         private String store = "auto";
+
+        /**
+         * 去重默认窗口。
+         *
+         * @deprecated 该字段在整条装配链路中均未被消费（pipeline 静默窗口优先级为
+         *             {@code event.silentWindow > scene.silentWindow > 硬编码 5m}），
+         *             实际生效的统一配置是 {@link Defaults#getSilentWindow()}
+         *             （对应 {@code notifyx.defaults.silent-window}）。
+         *             保留以兼容既有 YAML，后续小版本移除。
+         */
+        @Deprecated
         private Duration defaultWindow = Duration.ofMinutes(5);
+
         private int maxEntries = 100_000;
 
         public boolean isEnabled() {
@@ -687,10 +699,18 @@ public class NotifyxProperties {
             this.store = store;
         }
 
+        /**
+         * @deprecated 详见字段 {@link #defaultWindow}。
+         */
+        @Deprecated
         public Duration getDefaultWindow() {
             return defaultWindow;
         }
 
+        /**
+         * @deprecated 详见字段 {@link #defaultWindow}。
+         */
+        @Deprecated
         public void setDefaultWindow(Duration defaultWindow) {
             this.defaultWindow = defaultWindow;
         }

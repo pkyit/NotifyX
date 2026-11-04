@@ -384,7 +384,7 @@
   `Masker.maskReceiver` 按内容选择邮箱/手机号/文本兜底。
 
 ## ISSUE-039 `dedupe.default-window` 与 `defaults.silent-window` 语义冲突
-- **状态**：OPEN（需用户/架构决策）
+- **状态**：CLOSED（iter-67）
 - **现象**：`notifyx.dedupe.default-window` 只作为 pipeline 在事件/场景都未配置窗口时的 fallback；
   但 `NotifyxAutoConfiguration` 总是用 `notifyx.defaults.silent-window`（默认 5m）填充每个场景，
   所以 Spring 环境下 `dedupe.default-window` 实际不可达。
@@ -396,6 +396,9 @@
   2. 明确优先级 `event > scene > dedupe.default-window > defaults.silent-window`，
      并让 autoconfigure 不再无条件把 defaults 写入 scene。
   需要用户确认后再改，避免 1.0.1 引入新的配置语义。
+- **iter-67 关闭方式**：废弃（`@Deprecated`）`notifyx.dedupe.default-window`，统一用
+  `notifyx.defaults.silent-window`。字段保留以兼容既有 YAML，启动诊断会输出废弃提示。
+  详见 `.memory/decisions.md` D-033 与 `.memory/iterations/2026-11-04-iter-67-close-issue-039.md`。
 
 ## ISSUE-040 审计 bizId / errorMsg 未脱敏，maskText 只处理身份证
 - **状态**：CLOSED（iter-46）
@@ -599,7 +602,7 @@
   现有 `WebhookChannelTest` 覆盖该读取与截断路径。
 
 ## ISSUE-060 低风险缺陷清单（2026-11-03 评估，N-7~N-14）
-- **状态**：OPEN（iter-65 处理 N-7/N-13，N-11 复核为误报；N-8/N-9/N-10/N-12/N-14 遗留）
+- **状态**：CLOSED（iter-65 处理 N-7/N-13，N-11 复核为误报；iter-66 收口 N-8/N-9/N-10/N-12/N-14）
 - **清单与证据**：
   1. N-7 `RetryPolicy.java:78`：退避乘法 long 溢出（base>~106 天时退避变 1ms）；
   2. N-8 `PriorityNotifyExecutor.java:76-109`：队列满替换 check-then-remove 非原子 + O(n) 扫描；
@@ -618,3 +621,17 @@
   - N-11 复核为误报：当前 `i + 4 < raw.length()` 已正确对应 `substring(i+1, i+5)` 的合法边界
     （`i` 在 switch 前已递增指向 `u`），改为 `<=` 反而会在串尾转义时 `substring` 越界，维持原实现不变；
   - N-8/N-9/N-10/N-12/N-14 遗留：属需重构或文档化性质（详见报告 §5.2），并入后续批次处理。
+- **iter-66 关闭方式**：
+  - N-14 已修复：`Aggregator.record` 改用 `ConcurrentHashMap.compute`，与 `flush` 的 `remove`
+    对同 key 串行化，窗口边界并发计数不再丢失；测试
+    `AggregatorTest.shouldNotLoseCountWhenFlushRacesWithRecord`（4 线程 × 200 条计数守恒）。
+  - N-12 已修复：`MemoryRateLimiter.tryAcquire` 清理后为空返回 `null`，空 deque 不常驻；
+    `evictExpired` Javadoc 明确由运维面按需调用、key 空间由场景/用户维度界定。
+  - N-10 已修复：`RabbitMqEnvelopeConsumer` 构造注入 `NotifyxProperties`，
+    `retry-enabled=true` 且 `notifyx.async.enabled=true` 时启动 WARN；测试
+    `shouldConsumeWhenAsyncDispatchWithRetry`；README / design §11.4 补前置条件。
+  - N-8 文档化：`PriorityNotifyExecutor` 类 Javadoc 写明软上限并发语义与 4096 扫描成本，
+    上调到 10 万级前需改增量最低优先级索引；实现不变。
+  - N-9 文档化：`KafkaNotifyBus` 类 Javadoc、design §11.2、README MQ 模式明示同步等待
+    broker 确认（最长 `delivery-timeout`，默认 10s）及其 producer-only 取舍。
+  - 详见 `.memory/iterations/2026-11-03-iter-66-issue-060-remainder.md`。

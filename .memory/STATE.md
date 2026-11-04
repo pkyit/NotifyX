@@ -1,6 +1,6 @@
 # NotifyX 状态快照
 
-> 更新时间：2026-11-03（iter-65：11-03 代码质量报告缺陷修复）
+> 更新时间：2026-11-04（iter-68：架构审查 A02/A03/A04 落地、A07 确认关闭）
 > 交付范围：设计书 **P0/P1 的 SDK 部分 + P2（Redis T1、JDBC）+ P3（Kafka/RabbitMQ producer、双传输 consumer）**。
 > **不是** 23 周后的 1.0 GA。
 > 构建基线：`mvn -B -ntp clean verify` 通过（Spotless/Checkstyle/JaCoCo 全绿），17 个模块；
@@ -411,3 +411,44 @@ sms4j 适配。
 - **遗留（见 ISSUE-060）**：N-8/N-9/N-10/N-12/N-14（需重构或文档化）；ISSUE-039
   （`dedupe.default-window` 不可达）为配置语义决策，待用户拍板。
 - **版本**：1.0.3（iter-65 修复合并后统一升级，含 iter-60~65 全部改动；Central 发布仍待授权）。
+
+## 18. ISSUE-060 剩余低风险缺陷收口（iter-66，2026-11-03）
+
+- **N-14（修复）**：`Aggregator.record` 改用 `ConcurrentHashMap.compute`，与 `flush` 的
+  `remove` 对同 key 串行化，窗口边界并发事件落入新桶；新增并发计数守恒测试。
+- **N-12（修复）**：`MemoryRateLimiter.tryAcquire` 清理后为空返回 `null`，空 deque 不常驻；
+  `evictExpired` 明确由运维面按需调度、key 空间由场景/用户维度界定。
+- **N-10（修复）**：`RabbitMqEnvelopeConsumer` 注入 `NotifyxProperties`，
+  `retry-enabled=true` + `notifyx.async.enabled=true` 时启动 WARN（异步派发会让 DLX 重试静默失效）；
+  新增测试 `shouldConsumeWhenAsyncDispatchWithRetry`。
+- **N-8（文档化）**：`PriorityNotifyExecutor` Javadoc 写明软上限非硬约束、4096 扫描成本，
+  上调到 10 万级前需改增量最低优先级索引；实现不变。
+- **N-9（文档化）**：`KafkaNotifyBus` Javadoc、design §11.2、README 明示同步等待 broker 确认
+  （最长 `delivery-timeout`，默认 10s）的 producer-only 取舍。
+- **验证**：`mvn -B -ntp clean verify` → **BUILD SUCCESS**，17/17 模块，
+  379 用例（366 执行 + 13 live 跳过），0 failure / 0 error，Spotless/Checkstyle/JaCoCo 全绿；
+  模块级 core/spring/consumer/bus-kafka 目标用例全绿。
+- **ISSUE-060 状态**：CLOSED。ISSUE-039 已于 iter-67 治理。仅剩 A02/A03/A04/A07 待用户决策。
+
+## 19. ISSUE-039 配置语义治理（iter-67，2026-11-04）
+
+- **决策**：废弃 `notifyx.dedupe.default-window`（D-033），统一用 `notifyx.defaults.silent-window`。
+- **根因**：整条消费链路均未读取 `Dedupe.defaultWindow` 字段——`autoconfigure` 装配 scene 时已用 `defaults.silentWindow`（默认 5m）填充，`pipeline.resolveSilentWindow` 根本没有 dedupe 级 fallback。该字段是死配置。
+- **改动**：
+  - `NotifyxProperties.Dedupe.defaultWindow` 字段 / getter / setter 加 `@Deprecated`，保留以兼容既有 YAML；
+  - 诊断表改用 `defaults.silent-window` + 废弃提示文案；
+  - design.md §14.2 新增废弃配置项表；README YAML 示例注释标注；
+  - 无运行时行为变更，无新增测试（属配置语义治理）。
+- **验证**：`mvn -B -ntp clean verify` → BUILD SUCCESS，17/17 模块，0 failure / 0 error。
+- **遗留**：无。架构审查 A01-A09 / A10-A15 全部处理完毕。迭代可收口推 1.0 GA。
+
+## 20. 架构审查 A02/A03/A04 落地、A07 确认关闭（iter-68，2026-11-04）
+
+- **A07 先行确认**：before-audit（默认开启）、before-send（默认关闭）、before-persist（默认关闭）三条脱敏链路全部有效，无改动。
+- **A02+A03 合并修复**（D-034）：
+  - `FailedRecord.recordId = eventId + ":" + channel`；同一事件不同渠道的失败记录互不覆盖。
+  - `dispatch()` 引入 `anySuccess` 追踪；dedupe release 条件改为 `failed && !anySuccess`——**全部失败才 release**，部分成功时成功渠道保持静默窗口、失败渠道由补偿器处理。
+  - 不做 channel+receiver 完整粒度（补偿语义是整事件重投），不改 dedupeKey 为 channel 级（SPI 级变更过大）。
+- **A04 NO_ROUTE 语义**（D-035）：`channels.isEmpty()` 分支返回 failed=true（handle 返回 false），同时 audit 写入 `errorMsg=NO_ROUTE`；现有测试 `shouldSkipWhenNoChannel` 固化了反模式，改为 `shouldReportNoRouteWhenNoChannel`。
+- **验证**：`mvn -B -ntp clean verify` → BUILD SUCCESS，17/17 模块，379 用例 0 failure / 0 error。
+- **遗留**：无。架构审查全部待决策项已关闭。

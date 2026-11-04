@@ -238,7 +238,8 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
         builder.append("│   · 熔断阈值 ").append(properties.getChannels().getCircuitBreaker().getFailureThreshold())
                 .append(" 次 / ").append(properties.getChannels().getCircuitBreaker().getOpenDuration()).append('\n');
         if (properties.getDedupe().isEnabled()) {
-            builder.append("│   · 去重窗口默认 ").append(properties.getDedupe().getDefaultWindow()).append('\n');
+            builder.append("│   · 去重窗口默认 ").append(properties.getDefaults().getSilentWindow())
+                    .append("（统一用 notifyx.defaults.silent-window；notifyx.dedupe.default-window 已废弃）\n");
         }
         if (properties.getAggregate().isEnabled()) {
             builder.append("│   · 聚合：实例内 ")

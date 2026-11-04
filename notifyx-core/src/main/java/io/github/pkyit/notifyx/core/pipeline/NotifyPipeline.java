@@ -215,22 +215,31 @@ public final class NotifyPipeline {
         List<String> receivers = resolveReceivers(event, scene);
         List<NotifyChannel> channels = resolveChannels(scene);
         if (channels.isEmpty()) {
-            log.debug("no channel available for scene={}", event.scene());
-            return true;
+            log.warn("no channel available for scene={}, eventId={}", event.scene(), event.eventId());
+            audit(event, level, "-", null,
+                    SendResult.nonRetryable("NO_ROUTE", Duration.ZERO), Duration.ZERO, 0);
+            return true;  // 整个投递链失败（无可用渠道）→ failed=true → handle 返回 false
         }
         boolean failed = false;
+        boolean anySuccess = false;
         for (NotifyChannel channel : channels) {
             if (channel.supportsBatch() && receivers.size() > 1) {
-                failed |= sendOne(channel, event, level, renderParams, null, dedupeKey, scene);
+                boolean channelFailed = sendOne(channel, event, level, renderParams, null, dedupeKey, scene);
+                failed |= channelFailed;
+                anySuccess |= !channelFailed;
             } else if (receivers.isEmpty()) {
-                failed |= sendOne(channel, event, level, renderParams, null, dedupeKey, scene);
+                boolean channelFailed = sendOne(channel, event, level, renderParams, null, dedupeKey, scene);
+                failed |= channelFailed;
+                anySuccess |= !channelFailed;
             } else {
                 for (String receiver : receivers) {
-                    failed |= sendOne(channel, event, level, renderParams, receiver, dedupeKey, scene);
+                    boolean channelFailed = sendOne(channel, event, level, renderParams, receiver, dedupeKey, scene);
+                    failed |= channelFailed;
+                    anySuccess |= !channelFailed;
                 }
             }
         }
-        if (failed && dedupe != null && dedupe.store() != null) {
+        if (failed && !anySuccess && dedupe != null && dedupe.store() != null) {
             dedupe.store().release(dedupeKey);
         }
         return failed;
@@ -423,7 +432,7 @@ public final class NotifyPipeline {
                 log.debug("envelope serialization failed: {}", codecFailure.toString());
                 envelopeJson = event.eventId();
             }
-            FailedRecord record = new FailedRecord(event.eventId(), RecordStatus.PENDING, 0, envelopeJson,
+            FailedRecord record = new FailedRecord(event.eventId() + ":" + channel, RecordStatus.PENDING, 0, envelopeJson,
                     channel, String.valueOf(result.failureReason()), attempts, now, now + 60_000L);
             failureStore.save(record);
             log.warn("event persisted for compensation eventId={} channel={}", event.eventId(), channel);

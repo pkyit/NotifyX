@@ -25,6 +25,11 @@ import io.github.pkyit.notifyx.core.pipeline.NotifyTaskExecutor;
  * <p>队列按「级别降序 + 入队时间升序」排序；队列达到软上限时丢弃优先级最低的任务
  * 并计入 {@code queue.discarded}，绝不使用 {@code CallerRunsPolicy}。</p>
  *
+ * <p><b>软上限语义</b>：{@code capacity} 是软上限而非硬约束。「读长度 → 找最低优先级 →
+ * 移除」不是单个原子操作，并发入队时队列可能短暂多出一条，或两个线程各自替换一条
+ * （净容量不变）。容量 4096 下每次满队扫描最多遍历 4096 个节点，成本可接受；
+ * 若需要把容量上调到 10 万级，应改为增量维护「最低优先级索引」，不要依赖线性扫描。</p>
+ *
  * <p>@implNote 线程安全。</p>
  *
  * @since 1.0

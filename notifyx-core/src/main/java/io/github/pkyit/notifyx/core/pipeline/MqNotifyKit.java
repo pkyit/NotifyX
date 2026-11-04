@@ -114,7 +114,7 @@ public final class MqNotifyKit implements NotifyKit {
         }
         try {
             long now = System.currentTimeMillis();
-            failureStore.save(new FailedRecord(event.eventId(), RecordStatus.PENDING, 0,
+            failureStore.save(new FailedRecord(event.eventId() + ":" + bus.name(), RecordStatus.PENDING, 0,
                     NotifyEnvelopeCodec.toJson(envelope), bus.name(), String.valueOf(error.getMessage()),
                     0, now, now + 60_000L));
         } catch (RuntimeException persistError) {

@@ -536,3 +536,65 @@
   本应各自保留一条补偿记录，覆盖会丢失渠道维度；根本问题已由「重投不落盘」根治，不引入新的覆盖副作用。
 - **复审条件**：若未来补偿需按 channel 维度重放（当前 recordId=eventId 无法区分渠道），
   重新审视 recordId 唯一性策略。
+
+## D-033 废弃 `notifyx.dedupe.default-window`，统一用 `defaults.silent-window`
+
+- **日期**：2026-11-04（iter-67）
+- **状态**：生效
+- **背景**：ISSUE-039 确认 `notifyx.dedupe.default-window` 是死配置——从 `NotifyxProperties.Dedupe.defaultWindow`
+  经 autoconfigure、SceneRegistry 到 pipeline，整条消费链路均未读取该字段。`NotifyPipeline.resolveSilentWindow`
+  的优先级是 `event.silentWindow() > scene.silentWindow() > 硬编码 5m`，autoconfigure 在装配 scene 时已无条件用
+  `defaults.silentWindow`（默认 5m）填充，所以 dedupe 级 fallback 永远不可达。
+- **决策**：在 `Dedupe.defaultWindow` 字段、getter、setter 上加 `@Deprecated`，保留字段与默认值以兼容既有 YAML；
+  诊断表与 design.md 废弃配置项表统一指向 `notifyx.defaults.silent-window`。
+- **理由**：
+  1. 零行为影响——没有任何消费方在读这个字段，废弃不会改变运行时行为；
+  2. 统一语义——「去重窗口」和「静默期」本就是同一概念的两个名字（`DedupeFilter` 用的就是 `ctx.silentWindow()`），
+     统一到 `defaults.silent-window` 降低认知负担；
+  3. 向后兼容——保留字段让已有 YAML 不报错，启动诊断会提醒废弃。
+- **影响**：IDE 自动补全（Spring Boot Configuration Metadata）会自动将该项标记为废弃，用户迁移成本低。
+- **复审条件**：1.1.0 小版本可考虑移除该字段（届时需同步删除 Properties 字段、getter/setter 与 Javadoc）。
+
+## D-034 FailedRecord recordId 升级为 `eventId:channel`，并将 dedupe release 限定为「全部失败」
+
+- **日期**：2026-11-04（iter-68）
+- **状态**：生效
+- **背景**（A02/A03）：
+  1. `FailedRecord.recordId` 只用 eventId，多渠道 fan-out 后 `LocalFileFailureStore` 后写覆盖先写、
+     `InMemoryFailureStore.updateStatus/requeue` 只 filter 第一条，补偿器无法知道失败的是哪个 channel。
+  2. `NotifyPipeline.dispatch()` 里 `if (failed) dedupe.store().release(dedupeKey)` 是事件级 release——
+     email 成功、webhook 失败时整个 dedupeKey 被释放，下一个同指纹事件到来 email 又会发一次，
+     把"失败恢复"变成"成功渠道重复轰炸"。
+- **决策**：
+  1. `FailedRecord.recordId = eventId + ":" + channel`（`MqNotifyKit` 同理用 `eventId + ":" + bus.name()`）；
+     同一事件不同渠道的失败记录互不覆盖、可独立被补偿器处理。
+  2. dispatch 引入 `anySuccess` 追踪布尔量；dedupe release 条件改为
+     `failed && !anySuccess`——**全部目标失败才 release**，部分成功时保留成功渠道的静默窗口、
+     失败渠道进入 FailureStore 由补偿器处理。
+- **理由**：
+  - 不做"完整粒度"（channel + receiver）——设计书 §9.9 补偿语义是"整事件重投"而非"定向到 receiver 重投"，
+    且同一渠道多 receiver 失败会产生 N 条记录，补偿复杂度高。channel 粒度已足以解决多渠道互相覆盖。
+  - 不改成 channel 级 dedupeKey——需要改 `resolveDedupeKey` 签名、`DedupeFilter` 和 store key 空间，
+    SPI 级变更过大；事件级 lease + 部分成功不 release 是语义最清晰、改动最小的解。
+- **影响**：
+  - 旧版本落盘的 FailureStore 文件（recordId 不带 channel）不会被新版本覆盖——文件按小时目录，
+    补偿器用新版本记录，旧文件自然过时间窗口淘汰；
+  - 部分成功场景下**同指纹事件不会立即重复发送成功渠道**，静默窗口内重复被挡住、
+    失败渠道由补偿器 at-least-once 重投（可能 at-least-once 再发一次成功渠道，属补偿器语义）。
+- **复审条件**：若补偿器需要按 receiver 粒度定向重投（而不是整事件重投），再加 receiver 维度。
+
+## D-035 无渠道可用视为失败（handle 返回 false）并审计 NO_ROUTE
+
+- **日期**：2026-11-04（iter-68）
+- **状态**：生效
+- **背景**（A04）：`channels.isEmpty()` 分支直接 `return true`，让"用户拼错渠道名"被伪装成"投递成功"，
+  是框架最危险的错误类型。现有测试 `shouldSkipWhenNoChannel` 固化了该反模式。
+- **决策**：
+  - `channels.isEmpty()` 分支改为 `return true`（dispatch 的 failed 返回值语义：真 = 投递失败），
+    同时调用 `audit(..., SendResult.nonRetryable("NO_ROUTE", ...))` 写入 `errorMsg=NO_ROUTE`；
+    `handle()` 外层返回 `!failed = false`，业务方拿到明确的失败信号。
+- **理由**：配置错误不应伪装成业务成功；保持最小改动（dispatch 3 行 + 改一个测试断言）。
+- **影响**：现有依赖"无渠道 handle 返回 true"的业务方（如有）会收到失败信号；但此前该行为是
+  反模式，未见真实依赖；设计书 §6.2 明确要求"fail-fast 校验"。
+- **复审条件**：启动时 fail-fast 校验 scene.channels 是否至少有一个可用渠道（目前只做了运行时返回失败，
+  启动校验可作为后续增强）。

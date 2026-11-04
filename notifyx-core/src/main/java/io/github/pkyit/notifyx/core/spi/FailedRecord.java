@@ -7,7 +7,7 @@ import java.util.Objects;
  *
  * <p>@implNote 不可变 record，线程安全。</p>
  *
- * @param recordId 记录 ID，取自 eventId
+ * @param recordId 记录 ID，由管线生成 {@code eventId + ":" + channel}，保证多渠道 fan-out 互不覆盖
  * @param status 状态
  * @param version 乐观锁版本
  * @param envelopeJson 完整报文（JSON）

@@ -22,6 +22,7 @@ import org.springframework.amqp.core.MessageProperties;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 
+import io.github.pkyit.notifyx.autoconfigure.NotifyxProperties;
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 import io.github.pkyit.notifyx.core.model.Level;
 import io.github.pkyit.notifyx.core.model.NotifyEnvelope;
@@ -40,9 +41,15 @@ class RabbitMqEnvelopeConsumerTest {
     private final Channel channel = mock(Channel.class);
 
     private RabbitMqEnvelopeConsumer consumer(boolean retryEnabled) {
+        return consumer(retryEnabled, false);
+    }
+
+    private RabbitMqEnvelopeConsumer consumer(boolean retryEnabled, boolean asyncEnabled) {
         ConsumerProperties properties = new ConsumerProperties();
         properties.getRabbitmq().setRetryEnabled(retryEnabled);
-        return new RabbitMqEnvelopeConsumer(kit, store, properties);
+        NotifyxProperties notifyxProperties = new NotifyxProperties();
+        notifyxProperties.getAsync().setEnabled(asyncEnabled);
+        return new RabbitMqEnvelopeConsumer(kit, store, properties, notifyxProperties);
     }
 
     @Test
@@ -90,6 +97,14 @@ class RabbitMqEnvelopeConsumerTest {
                 .containsEntry("x-custom", "keep")
                 .containsEntry(RabbitMqEnvelopeConsumer.RETRY_COUNT_HEADER, 1);
         assertThat(store.firstSeen("idem-rmq")).isTrue();
+    }
+
+    @Test
+    @DisplayName("异步派发与重试同时开启：仅启动告警，消费行为不变")
+    void shouldConsumeWhenAsyncDispatchWithRetry() {
+        consumer(true, true).onMessage(message(payload("evt_1", "idem-rmq")), channel);
+
+        assertThat(kit.events).hasSize(1);
     }
 
     @Test

@@ -39,7 +39,8 @@ public final class MemoryRateLimiter implements RateLimiter {
                 deque.addLast(now);
                 acquired[0] = true;
             }
-            return deque;
+            // 清理后仍为空则移出 map，避免空队列对象常驻
+            return deque.isEmpty() ? null : deque;
         });
         return acquired[0];
     }
@@ -64,6 +65,9 @@ public final class MemoryRateLimiter implements RateLimiter {
 
     /**
      * 清理已完全过期的 key，避免长期运行后 map 无限增长。
+     *
+     * <p>key 是场景/用户限流维度，数量由场景配置界定；本方法不内置调度，
+     * 需要运维面（生命周期、定时任务）在有额外清理需求时主动调用。</p>
      *
      * @param window 窗口
      * @return 清理数量

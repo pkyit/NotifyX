@@ -3,8 +3,13 @@ package io.github.pkyit.notifyx.core.pipeline;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.DisplayName;
@@ -72,6 +77,44 @@ class AggregatorTest {
         aggregator.close();
 
         assertThat(emitted).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("窗口边界并发 record 与 flush 不丢计数")
+    void shouldNotLoseCountWhenFlushRacesWithRecord() throws Exception {
+        Aggregator aggregator = new Aggregator(new Aggregator.Config(true, Duration.ofSeconds(30), 1_000));
+        aggregator.sink(emitted::add);
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<?>> futures = new ArrayList<>();
+        int perThread = 200;
+        try {
+            for (int i = 0; i < 4; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    for (int j = 0; j < perThread; j++) {
+                        aggregator.record(event("SO1"), Level.ERROR, "key-race", "inst-1");
+                        if (j % 20 == 0) {
+                            aggregator.flushAll();
+                        }
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> future : futures) {
+                future.get(10, TimeUnit.SECONDS);
+            }
+            aggregator.flushAll();
+
+            long total = emitted.stream()
+                    .mapToLong(summary -> (Long) summary.params().get("aggregateCount"))
+                    .sum();
+            assertThat(total).isEqualTo(4L * perThread);
+        } finally {
+            pool.shutdownNow();
+            aggregator.close();
+        }
     }
 
     @Test
