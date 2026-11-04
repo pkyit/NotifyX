@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 
+import io.github.pkyit.notifyx.autoconfigure.NotifyxProperties;
 import io.github.pkyit.notifyx.core.api.NotifyKit;
 import io.github.pkyit.notifyx.core.model.NotifyEnvelope;
 import io.github.pkyit.notifyx.core.support.NotifyEnvelopeCodec;
@@ -52,13 +53,19 @@ public class RabbitMqEnvelopeConsumer {
      * @param notifyKit 门面
      * @param idempotencyStore 幂等存储
      * @param properties 配置
+     * @param notifyxProperties SDK 全局配置（用于校验异步派发与重试拓扑的兼容性）
      */
     public RabbitMqEnvelopeConsumer(NotifyKit notifyKit, IdempotencyStore idempotencyStore,
-                                    ConsumerProperties properties) {
+                                    ConsumerProperties properties, NotifyxProperties notifyxProperties) {
         this.notifyKit = notifyKit;
         this.idempotencyStore = idempotencyStore;
         this.retryEnabled = properties.getRabbitmq().isRetryEnabled();
         this.retryExchange = properties.getRabbitmq().getRetryExchange();
+        if (this.retryEnabled && notifyxProperties.getAsync().isEnabled()) {
+            // 异步派发时 send 立即返回，失败不会抛出，DLX 重试拓扑会静默失效
+            log.warn("notifyx consumer rabbit retry requires notifyx.async.enabled=false; "
+                    + "with async enabled failed messages will be ACKed and the retry topology has no effect");
+        }
     }
 
     /**
