@@ -103,8 +103,9 @@ public final class CircuitBreaker {
     /**
      * 中性释放半开探测标记。
      *
-     * <p>渠道返回抑制状态（SUPPRESSED/DEDUPED/RATE_LIMITED）时调用：探测请求既未成功也未失败，
-     * 不应计入熔断，但必须释放 {@code probeInFlight} 让后续请求能重新探测。</p>
+     * <p>探测请求既未成功也未失败时调用，包括：渠道返回抑制状态（SUPPRESSED/DEDUPED/RATE_LIMITED）、
+     * 返回不可重试结果（FAIL_NON_RETRYABLE）或抛出不可重试异常。这些情形不应计入熔断，
+     * 但必须释放 {@code probeInFlight}，否则熔断器会永久停留在半开状态。</p>
      */
     public synchronized void neutralProbeRelease() {
         if (state == State.HALF_OPEN) {
