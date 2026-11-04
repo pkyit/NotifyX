@@ -120,15 +120,18 @@ class NotifyPipelineRetryTest {
     }
 
     @Test
-    @DisplayName("场景没有可用渠道时安静跳过，不抛异常也不审计")
-    void shouldSkipWhenNoChannel() {
+    @DisplayName("场景没有可用渠道时返回失败 + 审计 NO_ROUTE")
+    void shouldReportNoRouteWhenNoChannel() {
         NotifyPipeline pipeline = pipeline(SceneConfig.builder("SCENE_A").build(),
                 new RetryPolicy(1, Duration.ofMillis(1), Duration.ofMillis(5), 0.0), 2, Duration.ofMillis(100));
 
-        pipeline.handle(event());
+        boolean handled = pipeline.handle(event());
 
+        assertThat(handled).isFalse();
         assertThat(channel.calls).isZero();
-        assertThat(audit.records).isEmpty();
+        assertThat(audit.statuses()).containsExactly("FAIL_NON_RETRYABLE");
+        assertThat(audit.records).anySatisfy(record ->
+                assertThat(record.errorMsg()).contains("NO_ROUTE"));
     }
 
     private NotifyPipeline pipeline(SceneConfig scene, RetryPolicy retryPolicy, int failureThreshold,
