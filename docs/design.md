@@ -1908,7 +1908,7 @@ notifyx:
 
 | MQ | 保序 | 重试退避 | 幂等 | 实现要点 |
 | --- | --- | --- | --- | --- |
-| **Kafka** | `key = dedupeKey` 保证同事件有序 | 自建（producer 侧退避后重投） | consumer 侧按 `idempotencyKey` 去重 | 单 consumer 组消费；`acks=all` + `enable.idempotence=true`（producer 级幂等）；分区数 ≥ consumer 实例数 |
+| **Kafka** | `key = dedupeKey` 保证同事件有序 | 自建（producer 侧退避后重投） | consumer 侧按 `idempotencyKey` 去重 | 单 consumer 组消费；`acks=all` + `enable.idempotence=true`（producer 级幂等）；分区数 ≥ consumer 实例数；`publish` 同步等待 broker 确认（最长 `delivery-timeout`，默认 10s），用于把失败精确写入 `FailureStore`（见 §11.3） |
 | **RocketMQ** | MessageQueue 选择器按 `dedupeKey` hash | ⭐ **直接用延迟级别**（1s/5s/10s/30s/1m/2m/…10m），天然实现指数退避 | consumer 侧 `SET NX` 或 DB 唯一索引 | 延迟级别比自建延迟队列干净得多，**优先推荐** |
 | **RabbitMQ** | 单队列单消费者可保序，多消费者不保序 | `x-dead-letter-exchange` + 多级 TTL 队列（`retry.5s` / `retry.1m` / `retry.5m`） | consumer 侧幂等 | TTL 队列数量固定（3~4 级），不要为每次重试建队列 |
 
@@ -1963,6 +1963,11 @@ MQ topic ──→ consumer ──→ 幂等检查 ──→ 完整责任链（�
 由 broker 按主队列 `x-dead-letter-exchange` + `x-dead-letter-routing-key=dead` 投递到
 `notifyx.retry.dead`。重试期间幂等键被释放，`firstSeen` 在每次重投时重新裁决，
 避免「失败重投被当重复丢弃」。详见 D-030。
+
+**重试拓扑的前置条件**：`retry-enabled=true` 依赖 consumer 侧**同步派发**
+（`notifyx.async.enabled=false`），只有 `NotifyKit.send` 同步抛出异常才能触发重投；
+异步派发时 `send` 立即返回，失败消息照常 ACK，重试拓扑静默失效。consumer 启动时检测到
+该组合会输出 WARN，部署方必须显式关闭异步（见 README「MQ Consumer」）。
 
 **consumer 的部署形态**：单实例（最简，天然无重复）或多实例 + 分区消费（Kafka 按 key 分区，同 `dedupeKey` 必到同一 consumer）。**推荐单实例起步**——通知量通常不需要横向扩展，单实例能彻底规避分布式协调问题。
 
@@ -2678,6 +2683,12 @@ notifyx:
 **为什么列表不做追加**：追加语义会让「我想只用钉钉」变成「钉钉 + 邮件」，与用户直觉相反，且难以排查。整体替换 + 文档明确说明，是更可控的选择。
 
 **为什么 Map 要深度合并**：Admin 通常只管理核心场景，一些临时调试场景写在 YAML 里。整体替换会导致 YAML 场景全部失效。**这个合并语义必须在启动诊断里输出**（「场景来源：Admin 21 个，YAML 2 个」），否则用户会困惑配置为什么没生效。
+
+**废弃配置项**：
+
+| 配置项 | 废弃版本 | 替代 | 原因 |
+| --- | --- | --- | --- |
+| `notifyx.dedupe.default-window` | 1.0.3 | `notifyx.defaults.silent-window`（场景级）或 `event.silentWindow`（代码级） | 从 properties → autoconfigure → SceneRegistry → pipeline，整条链路均未被消费；pipeline 静默窗口解析优先级为 `event > scene > 硬编码 5m`，不存在 dedupe 级 fallback。诊断表已自动输出废弃提示。 |
 
 ### 14.3 配置元数据（IDE 自动补全）
 

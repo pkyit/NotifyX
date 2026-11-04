@@ -219,6 +219,7 @@ notifyx:
   dedupe:
     enabled: true
     max-entries: 100000
+    # default-window: 30s    # ← 已废弃（1.0.3），统一用 notifyx.defaults.silent-window
   aggregate:
     enabled: false          # T0 实例内聚合：窗口内被去重的事件汇总成一条摘要
     window: 10s
@@ -485,6 +486,9 @@ notifyx:
   - 退避重试（DLX + 多级 TTL）：`notifyx.bus.rabbitmq.retry.enabled=true` +
     `notifyx.bus.rabbitmq.retry.exchange=notifyx.retry`（默认），producer 会声明主队列 → 重试交换机
     `notifyx.retry` → 3 级 TTL 队列 `notifyx.retry.{5s,1m,5m}`（到期回主队列）；
+- `publish` 同步等待 broker 确认（`notifyx.bus.kafka.delivery-timeout`，默认 10s），
+  调用线程在该时长内有界阻塞；这是 producer-only 换取「失败精确落盘」的取舍，
+  业务线程无法接受时请用 local 模式或自行异步化；
 - 发布失败写入 `FailureStore` 兜底，不向业务抛异常；
 - `onSuccess/onError` 无法跨进程，MQ 模式下只 warn；
 - consumer 见下一节（Kafka / RabbitMQ 均已实现）。
@@ -519,6 +523,8 @@ java -jar notifyx-consumer/target/notifyx-consumer-1.0.3.jar \
     （默认 1000/批，标准 `limit`/`in` 语法），调度由部署方负责（`@Scheduled` / CronJob），
     SDK 不内置后台线程、不默认自动删除；
 - `async.enabled=false`，按分区同步处理保序；坏报文只记录并 ACK，避免毒消息卡分区；
+  **RabbitMQ 退避重试要求保持 `async.enabled=false`**：异步派发时失败不会抛出，
+  消费端仍会 ACK，DLX 重试会静默失效（启动检测到该组合会输出 WARN）；
 - RabbitMQ 死信/重试：`notifyx.consumer.rabbitmq.retry-enabled=true` 时，处理失败且
   `x-retry-count < 3` 的消息会先释放幂等键、再投回重试交换机（routing key `5s`/`1m`/`5m`，
   保留原消息头与 `messageId`）并 ACK；否则抛 `AmqpRejectAndDontRequeueException`，
