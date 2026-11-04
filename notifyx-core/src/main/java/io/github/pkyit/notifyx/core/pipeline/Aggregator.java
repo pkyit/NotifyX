@@ -31,7 +31,8 @@ import io.github.pkyit.notifyx.core.model.NotifyEvent;
  * <p>窗口结束时通过 {@link #sink(Consumer)} 注入的出口（通常是管线自身）投递一条摘要事件，
  * 摘要带唯一 {@code dedupeKey}，因此不会被去重吞掉。</p>
  *
- * <p>@implNote 线程安全；桶内计数在桶对象锁内完成，窗口结束由单线程调度器触发。
+ * <p>@implNote 线程安全；桶的创建与计数递增通过 {@link ConcurrentHashMap#compute} 与桶移除
+ * 串行化，窗口结束时并发到达的事件会落入新桶而不是被丢弃；窗口结束由单线程调度器触发。
  * 关闭时会把剩余桶立即汇总，避免「关闭窗口内的聚合信息丢失」。</p>
  *
  * @since 1.0
@@ -87,23 +88,24 @@ public final class Aggregator implements EventAggregator {
         }
         long now = System.currentTimeMillis();
         String key = dedupeKey == null || dedupeKey.isBlank() ? event.eventId() : dedupeKey;
-        Bucket bucket = buckets.computeIfAbsent(key, ignored -> new Bucket(event.scene(), key, now));
-        synchronized (bucket) {
-            bucket.count++;
-            if (level != null && (bucket.level == null || level.atLeast(bucket.level))) {
-                bucket.level = level;
+        String sample = sampleOf(event);
+        Bucket bucket = buckets.compute(key, (ignored, current) -> {
+            Bucket target = current == null ? new Bucket(event.scene(), key, now) : current;
+            target.count++;
+            if (level != null && (target.level == null || level.atLeast(target.level))) {
+                target.level = level;
             }
             if (instanceId != null) {
-                bucket.instances.add(instanceId);
+                target.instances.add(instanceId);
             }
-            String sample = sampleOf(event);
-            if (bucket.firstSample == null) {
-                bucket.firstSample = sample;
-                bucket.firstAt = now;
+            if (target.firstSample == null) {
+                target.firstSample = sample;
+                target.firstAt = now;
             }
-            bucket.lastSample = sample;
-            bucket.lastAt = now;
-        }
+            target.lastSample = sample;
+            target.lastAt = now;
+            return target;
+        });
         schedule(key, bucket);
         evictIfNeeded();
     }
