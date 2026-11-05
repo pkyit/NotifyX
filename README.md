@@ -25,12 +25,12 @@ NotifyX 把「发送」收口成一条固定责任链：**场景路由 → 免�
 <dependency>
     <groupId>io.github.pkyit</groupId>
     <artifactId>notifyx-spring-boot-starter</artifactId>
-    <version>1.0.0</version>
+    <version>最新版</version>
 </dependency>
 <dependency>
     <groupId>io.github.pkyit</groupId>
     <artifactId>notifyx-channel-log</artifactId>
-    <version>1.0.0</version>
+    <version>最新版</version>
 </dependency>
 ```
 
