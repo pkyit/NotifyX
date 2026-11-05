@@ -3320,6 +3320,8 @@ notifyx-sample/
 
 `autoPublish=false` 是刻意的：Central 的 release **发布后不可撤回、不可覆盖**。留一个人工确认环节，避免把带 bug 的版本永久推给用户。
 
+**发布范围**：只有可被业务方依赖的库模块进入 Central bundle。`notifyx-sample`（可运行验收示例）和 `notifyx-consumer`（独立消费服务）是可执行应用，不是依赖坐标，模块 POM 用 `central-publishing-maven-plugin` 的 `<skipPublishing>true</skipPublishing>` 排除。二者经 Spring Boot `repackage` 后是 fat jar（实测约 26 MB + 46 MB），一旦发布就会吃掉当月 `Release Size` 配额（免费额度 80 MB）的九成，导致正常库版本发不出去。
+
 ### 19.2 alias artifact 发布（ADR-001 的落地）
 
 ```xml
