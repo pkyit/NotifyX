@@ -29,7 +29,8 @@ import io.github.pkyit.notifyx.spring.event.NotifyxEventBridge;
 class ZeroDependencyStartupTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(NotifyxAutoConfiguration.class, LogChannelAutoConfiguration.class));
+            .withConfiguration(AutoConfigurations.of(NotifyxAutoConfiguration.class,
+                    NotifyxDisabledAutoConfiguration.class, LogChannelAutoConfiguration.class));
 
     @Test
     @DisplayName("T13：无 Redis / MQ / DB 也能装配出 NotifyKit")
@@ -71,10 +72,14 @@ class ZeroDependencyStartupTest {
     }
 
     @Test
-    @DisplayName("notifyx.enabled=false 时不装配")
+    @DisplayName("notifyx.enabled=false 时仍注入空转 NotifyKit（总开关语义）")
     void shouldBackOffWhenDisabled() {
         runner.withPropertyValues("notifyx.enabled=false")
-                .run(context -> assertThat(context).doesNotHaveBean(NotifyKit.class));
+                .run(context -> {
+                    assertThat(context).hasSingleBean(NotifyKit.class);
+                    assertThat(context.getBean(NotifyKit.class))
+                            .isInstanceOf(NotifyxDisabledAutoConfiguration.NoopNotifyKit.class);
+                });
     }
 
     @Test

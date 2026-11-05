@@ -83,7 +83,6 @@ import io.github.pkyit.notifyx.spring.spel.SpelEvaluator;
  * @since 1.0
  */
 @AutoConfiguration
-@ConditionalOnProperty(prefix = "notifyx", name = "enabled", matchIfMissing = true)
 @EnableConfigurationProperties(NotifyxProperties.class)
 public class NotifyxAutoConfiguration {
 
@@ -329,6 +328,7 @@ public class NotifyxAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "notifyx", name = "enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnProperty(prefix = "notifyx", name = "mode", havingValue = "local", matchIfMissing = true)
     public NotifyKit notifyxNotifyKit(NotifyxProperties properties,
                                       SceneRegistry sceneRegistry,
@@ -423,6 +423,7 @@ public class NotifyxAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "notifyx", name = "enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnProperty(prefix = "notifyx", name = "mode", havingValue = "mq")
     public NotifyKit notifyxMqNotifyKit(NotifyBus bus, FailureStore failureStore, NotifyMetrics metrics,
                                         NotifyxProperties properties, Environment environment) {
