@@ -2,8 +2,6 @@ package io.github.pkyit.notifyx.autoconfigure;
 
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,8 +34,6 @@ import io.github.pkyit.notifyx.core.model.NotifyEvent;
 @ConditionalOnProperty(prefix = "notifyx", name = "enabled", havingValue = "false")
 public class NotifyxDisabledAutoConfiguration {
 
-    private static final Logger log = LoggerFactory.getLogger(NotifyxDisabledAutoConfiguration.class);
-
     /**
      * 关闭态的空转门面。
      *
@@ -46,7 +42,6 @@ public class NotifyxDisabledAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public NotifyKit notifyxNoopNotifyKit() {
-        log.info("notifyx disabled: NotifyKit is a no-op, all notifications are silently dropped");
         return new NoopNotifyKit();
     }
 

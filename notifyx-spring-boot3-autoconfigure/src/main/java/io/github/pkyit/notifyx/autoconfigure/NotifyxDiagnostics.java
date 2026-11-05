@@ -153,6 +153,11 @@ public final class NotifyxDiagnostics implements ApplicationListener<Application
             return;
         }
         try {
+            // 总开关关闭：仅打印一行关闭提示，不渲染完整诊断表
+            if (!properties.isEnabled()) {
+                log.info("\nNotifyX 已关闭（notifyx.enabled=false），所有通知静默丢弃。");
+                return;
+            }
             log.info("\n{}", render());
         } catch (RuntimeException ex) {
             // 诊断表失败绝不影响应用启动
