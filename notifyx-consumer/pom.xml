@@ -73,6 +73,15 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- 独立消费服务是可运行应用，不是被依赖的库；不发布 fat jar 到 Central -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>${central-publishing-plugin.version}</version>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

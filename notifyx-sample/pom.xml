@@ -65,6 +65,15 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- 示例工程只用于本地运行/演示，不发布到 Central：版本清单里也没有它 -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>${central-publishing-plugin.version}</version>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
