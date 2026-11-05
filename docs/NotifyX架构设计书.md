@@ -2326,7 +2326,7 @@ X-Notifyx-Signature:  sha256=HmacSHA256(signContent, appSecret)
 
 ```yaml
 notifyx:
-  enabled: true                        # 总开关，false 时整个 starter 不装配
+  enabled: true                        # 总开关，false 时所有通知静默丢弃，但仍注入空转 NotifyKit（不破坏依赖注入）
   env: prod                            # 打在全局模板里的环境标识
   tenant: ${spring.application.name:unknown}
   mode: local                          # local | mq
